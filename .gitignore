@@ -1,6 +1,3 @@
-# Prerequisites
-*.d
-
 # Object files
 *.o
 *.ko
@@ -49,3 +46,11 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# misc
+*.wav
+*.spc
+
+# dub stuff
+dub.selections.json
+.dub/

@@ -1,0 +1,10 @@
+{
+	"description": "snes_spc",
+	"license": "GPL",
+	"name": "snes_spc",
+	"targetType": "library",
+	"subPackages": [
+		"player"
+	],
+	"dflags": ["-checkaction=C"]
+}

@@ -1,0 +1,10 @@
+{
+	"description": "spc player",
+	"license": "BSL-1.0",
+	"name": "player",
+	"targetType": "executable",
+	"dependencies": {
+		"snes_spc": "*",
+		"bindbc-sdl": "~>0.19.2"
+	}
+}
