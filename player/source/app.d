@@ -43,14 +43,13 @@ extern (C) void _sampling_func(void* user, ubyte* buf, int bufSize) nothrow {
 	filter.run((cast(short*)buf)[0 .. bufSize /2]);
 }
 
-__gshared SPC_Filter* filter;
+__gshared SPC_Filter filter;
 int main(string[] args)
 {
 	/* Create emulator and filter */
 	SNES_SPC snes_spc;
 	snes_spc.init_();
-	filter = new SPC_Filter;
-	if ( !filter ) error( "Out of memory" );
+	filter = SPC_Filter();
 
 	/* Load SPC */
 	{
