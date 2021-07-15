@@ -1,7 +1,7 @@
 {
-	"description": "snes_spc",
+	"description": "SPC700 Emulator",
 	"license": "GPL",
-	"name": "snes_spc",
+	"name": "spc700",
 	"targetType": "library",
 	"subPackages": [
 		"player"

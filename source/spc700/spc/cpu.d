@@ -2,12 +2,12 @@
 
 // snes_spc 0.9.0. http://www.slack.net/~ant/
 
-module snes_spc.spc.cpu;
+module spc700.spc.cpu;
 
 import core.stdc.config;
 import core.stdc.string;
 
-import snes_spc.dsp.dsp;
+import spc700.dsp.dsp;
 
 const int cpu_lag_max = 12 - 1; // DIV YA,X takes 12 clocks
 
@@ -429,6 +429,11 @@ public:
 				copier.extra();
 			}
 			copier.extra();
+		}
+
+		void saveFullSPC(ubyte[] output) @safe {
+			init_header(output);
+			save_spc(output);
 		}
 
 		// Writes minimal header to spc_out

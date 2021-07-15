@@ -1,4 +1,4 @@
-import snes_spc;
+import spc700;
 
 import core.stdc.stdlib;
 import std.experimental.logger;

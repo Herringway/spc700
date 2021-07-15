@@ -4,7 +4,7 @@
 	"name": "player",
 	"targetType": "executable",
 	"dependencies": {
-		"snes_spc": "*",
+		"spc700": "*",
 		"bindbc-sdl": "~>0.19.2"
 	}
 }

@@ -1,10 +1,10 @@
-module snes_spc.spc.c;
+module spc700.spc.c;
 
-import snes_spc.memory;
+import spc700.memory;
 
-import snes_spc.spc.filter;
-import snes_spc.spc.cpu;
-import snes_spc.dsp.dsp;
+import spc700.spc.filter;
+import spc700.spc.cpu;
+import spc700.dsp.dsp;
 
 import core.stdc.stdlib;
 import core.lifetime;
@@ -39,7 +39,7 @@ SNES_SPC* spc_new() {
 
 /* Frees SPC emulator */
 void spc_delete(SNES_SPC* s) {
-	free(s);
+	manualFree(s);
 }
 
 /* Sample pairs generated per second */

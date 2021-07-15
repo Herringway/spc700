@@ -1,6 +1,6 @@
 // snes_spc 0.9.0. http://www.slack.net/~ant/
 
-module snes_spc.spc.filter;
+module spc700.spc.filter;
 
 import core.stdc.string;
 

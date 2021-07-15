@@ -1,5 +1,5 @@
 // Highly accurate SNES SPC-700 DSP emulator
-module snes_spc.dsp.dsp;
+module spc700.dsp.dsp;
 
 import core.stdc.string;
 

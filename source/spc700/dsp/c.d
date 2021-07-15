@@ -1,8 +1,7 @@
-module snes_spc.dsp.c;
-// snes_spc 0.9.0. http://www.slack.net/~ant/
+module spc700.dsp.c;
 
-import snes_spc.memory;
-import snes_spc.dsp.dsp;
+import spc700.memory;
+import spc700.dsp.dsp;
 
 import core.stdc.stdlib;
 
@@ -33,7 +32,7 @@ SPC_DSP* spc_dsp_new() {
 
 /* Frees DSP emulator */
 void spc_dsp_delete(SPC_DSP* s) {
-	free(s);
+	manualFree(s);
 }
 
 /* Initializes DSP and has it use the 64K RAM provided */
