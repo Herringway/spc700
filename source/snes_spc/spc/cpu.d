@@ -284,14 +284,14 @@ public:
 	// Loads SPC data into emulator
 	enum spc_min_file_size = 0x10180;
 	enum spc_file_size = 0x10200;
-	const(char)* load_spc(const(void)[] data) {
+	const(char)* load_spc(const(void)[] data) @system {
 		const spc_file_t* spc = cast(const(spc_file_t)*) data.ptr;
 
 		// be sure compiler didn't insert any padding into fle_t
 		assert(spc_file_t.sizeof == spc_min_file_size + 0x80);
 
 		// Check signature and file size
-		if (data.length < signature_size || memcmp(spc, signature.ptr, 27))
+		if (data.length < signature_size || memcmp(spc, spcSignature.ptr, 27))
 			return "Not an SPC file";
 
 		if (data.length < spc_min_file_size)
@@ -318,19 +318,19 @@ public:
 	}
 
 	// Clears echo region. Useful after loading an SPC as many have garbage in echo.
-	void clear_echo() {
+	void clear_echo() @safe {
 		if (!(dsp.read(SPC_DSP.r_flg) & 0x20)) {
 			int addr = 0x100 * dsp.read(SPC_DSP.r_esa);
 			int end = addr + 0x800 * (dsp.read(SPC_DSP.r_edl) & 0x0F);
 			if (end > 0x10000)
 				end = 0x10000;
-			memset(&m.ram.ram[addr], 0xFF, end - addr);
+			m.ram.ram[addr .. end] = 0xFF;
 		}
 	}
 
 	// Plays for count samples and write samples to out. Discards samples if out
 	// is NULL. Count must be a multiple of 2 since output is stereo.
-	const(char)* play(int count, sample_t* out_) {
+	const(char)* play(int count, sample_t* out_) @system {
 		assert((count & 1) == 0); // must be even
 		if (count) {
 			set_output(out_, count);
@@ -343,7 +343,7 @@ public:
 	}
 
 	// Skips count samples. Several times faster than play() when using fast DSP.
-	const(char)* skip(int count) {
+	const(char)* skip(int count) @system {
 		version (SPC_LESS_ACCURATE) {
 			if (count > 2 * sample_rate * 2) {
 				set_output(0, 0);
@@ -432,19 +432,19 @@ public:
 		}
 
 		// Writes minimal header to spc_out
-		static void init_header(void* spc_out) @system {
-			spc_file_t* spc = cast(spc_file_t*) spc_out;
-
-			spc.has_id666 = 26; // has none
-			spc.version_ = 30;
-			spc.signature[] = signature;
-			memset(spc.text.ptr, 0, spc.text.sizeof);
+		static void init_header(ubyte[] spc_out) @safe {
+			with((cast(spc_file_t[])spc_out[0 .. spc_file_t.sizeof])[0]) {
+				has_id666 = 26; // has none
+				version_ = 30;
+				signature[] = spcSignature;
+				text[] = 0;
+			}
 		}
 
 		// Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
 		// Does not set up SPC header; use init_header() for that.
-		void save_spc(void* spc_out) @system {
-			spc_file_t* spc = cast(spc_file_t*) spc_out;
+		void save_spc(ubyte[] spc_out) @safe {
+			spc_file_t* spc = &(cast(spc_file_t[]) spc_out[0 .. spc_file_t.sizeof])[0];
 
 			// CPU
 			spc.pcl = cast(ubyte)(m.cpu_regs.pc >> 0);
@@ -456,11 +456,11 @@ public:
 			spc.sp = cast(ubyte) m.cpu_regs.sp;
 
 			// RAM, ROM
-			memcpy(spc.ram.ptr, m.ram.ram.ptr, spc.ram.sizeof);
+			spc.ram[] = m.ram.ram;
 			if (m.rom_enabled)
-				memcpy(spc.ram.ptr + rom_addr, m.hi_ram.ptr, m.hi_ram.sizeof);
-			memset(spc.unused.ptr, 0, spc.unused.sizeof);
-			memcpy(spc.ipl_rom.ptr, m.rom.ptr, spc.ipl_rom.sizeof);
+				spc.ram[rom_addr .. rom_addr + m.hi_ram.sizeof] = m.hi_ram;
+			spc.unused[] = 0;
+			spc.ipl_rom[] = m.rom;
 
 			// SMP registers
 			save_regs(spc.ram[0xF0 .. 0x100]);
@@ -2560,7 +2560,7 @@ private:
 		ubyte[0x40] ipl_rom;
 	}
 
-	static immutable char[signature_size] signature = "SNES-SPC700 Sound File Data v0.30\x1A\x1A";
+	static immutable char[signature_size] spcSignature = "SNES-SPC700 Sound File Data v0.30\x1A\x1A";
 
 	void save_regs(ref ubyte[reg_count] out_) @safe {
 		// Use current timer counter values

@@ -153,7 +153,7 @@ version(SPC_NO_COPY_STATE_FUNCS) {} else {
 	/* Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
 	Does not set up SPC header; use spc_init_header() for that. */
 	void spc_save_spc(SNES_SPC* s, void* spc_out) {
-		s.save_spc(spc_out);
+		s.save_spc((cast(ubyte*)spc_out)[0 .. spc_file_size]);
 	}
 	/* Returns non-zero if new key-on events occurred since last check. Useful for
 	trimming silence while saving an SPC. */
@@ -162,7 +162,7 @@ version(SPC_NO_COPY_STATE_FUNCS) {} else {
 	}
 	/* Writes minimal SPC file header to spc_out */
 	void spc_init_header(void* spc_out) {
-		SNES_SPC.init_header(spc_out);
+		SNES_SPC.init_header((cast(ubyte*)spc_out)[0 .. spc_file_size]);
 	}
 }
 
