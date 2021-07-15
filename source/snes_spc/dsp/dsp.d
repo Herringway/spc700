@@ -422,7 +422,7 @@ public:
 	enum state_size = 640; // maximum space needed when saving
 	version(SPC_NO_COPY_STATE_FUNCS) {} else {
 		alias copy_func_t = void delegate(ubyte** io, void[] state) @safe nothrow;
-		void copy_state(ubyte** io, copy_func_t copy) @system {
+		void copy_state(ubyte** io, copy_func_t copy) @safe {
 			SPC_State_Copier copier = SPC_State_Copier(io, copy);
 
 			auto SPC_COPY(T, U)(ref U state) {
@@ -474,7 +474,7 @@ public:
 				}
 			}
 			m.echo_hist_pos = 0;
-			memcpy(&m.echo_hist[echo_hist_size], m.echo_hist.ptr, echo_hist_size * m.echo_hist[0].sizeof);
+			m.echo_hist[echo_hist_size .. echo_hist_size * 2] = m.echo_hist[0 .. echo_hist_size];
 
 			// Misc
 			SPC_COPY!ubyte(m.every_other_sample);

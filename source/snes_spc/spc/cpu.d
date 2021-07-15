@@ -379,7 +379,7 @@ public:
 		// Saves/loads state
 		enum state_size = 67 * 1024L; // maximum space needed when saving
 		alias copy_func_t = SPC_DSP.copy_func_t;
-		void copy_state(ubyte** io, copy_func_t copy) @system {
+		void copy_state(ubyte** io, copy_func_t copy) @safe {
 			auto copier = SPC_State_Copier(io, copy);
 			auto SPC_COPY(T, U)(ref U state) {
 				state = cast(T) copier.copy_int(state, T.sizeof);
@@ -397,13 +397,13 @@ public:
 				// SMP registers
 				ubyte[port_count] out_ports;
 				ubyte[reg_count] regs;
-				memcpy(out_ports.ptr, &m.smp_regs[0][r_cpuio0], out_ports.sizeof);
-				save_regs(regs.ptr);
+				out_ports = m.smp_regs[0][r_cpuio0 .. r_cpuio0 + out_ports.length];
+				save_regs(regs);
 				copier.copy(regs);
 				copier.copy(out_ports);
 				load_regs(regs);
 				regs_loaded();
-				memcpy(&m.smp_regs[0][r_cpuio0], out_ports.ptr, out_ports.sizeof);
+				m.smp_regs[0][r_cpuio0 .. r_cpuio0 + out_ports.length] = out_ports;
 			}
 
 			// CPU registers
@@ -437,7 +437,7 @@ public:
 
 			spc.has_id666 = 26; // has none
 			spc.version_ = 30;
-			spc.signature = signature;
+			spc.signature[] = signature;
 			memset(spc.text.ptr, 0, spc.text.sizeof);
 		}
 
@@ -463,7 +463,7 @@ public:
 			memcpy(spc.ipl_rom.ptr, m.rom.ptr, spc.ipl_rom.sizeof);
 
 			// SMP registers
-			save_regs(&spc.ram[0xF0]);
+			save_regs(spc.ram[0xF0 .. 0x100]);
 			int i;
 			for (i = 0; i < port_count; i++)
 				spc.ram[0xF0 + r_cpuio0 + i] = m.smp_regs[1][r_cpuio0 + i];
@@ -2562,14 +2562,13 @@ private:
 
 	static immutable char[signature_size] signature = "SNES-SPC700 Sound File Data v0.30\x1A\x1A";
 
-	//void save_regs( ubyte[reg_count] out_ ) {
-	void save_regs(ubyte* out_) @system {
+	void save_regs(ref ubyte[reg_count] out_) @safe {
 		// Use current timer counter values
 		for (int i = 0; i < timer_count; i++)
 			out_[r_t0out + i] = cast(ubyte) m.timers[i].counter;
 
 		// Last written values
-		memcpy(out_, m.smp_regs[0].ptr, r_t0out);
+		out_[0 .. r_t0out] = m.smp_regs[0][0 .. r_t0out];
 	}
 }
 
