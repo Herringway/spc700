@@ -682,7 +682,7 @@ private:
 	void save_extra() @system {
 		// Get end pointers
 		const(sample_t)* main_end = m.buf_end; // end of data written to buf
-		const(sample_t)* dsp_end = dsp.out_pos(); // end of data written to dsp.extra()
+		const(sample_t)* dsp_end = dsp.out_pos().ptr; // end of data written to dsp.extra()
 		if (m.buf_begin <= dsp_end && dsp_end <= main_end) {
 			main_end = dsp_end;
 			dsp_end = dsp.extra().ptr; // nothing in DSP's extra

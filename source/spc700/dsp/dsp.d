@@ -128,16 +128,15 @@ public:
 		if (!out_) {
 			out_ = m.extra;
 		}
-		m.out_begin = out_.ptr;
-		m.out_ = out_.ptr;
-		m.out_end = out_.ptr + out_.length;
+		m.initial_samples = out_.length;
+		m.out_ = out_;
 	}
 
 	// Number of samples written to output since it was last set, always
 	// a multiple of 2. Undefined if more samples were generated than
 	// output buffer could hold.
 	int sample_count() const @safe {
-		return cast(int)(m.out_ - m.out_begin);
+		return cast(int)(m.initial_samples - m.out_.length);
 	}
 
 	// Emulation
@@ -569,7 +568,7 @@ public:
 		return m.extra;
 	}
 
-	const(sample_t)* out_pos() const @safe {
+	const(sample_t)[] out_pos() const @safe {
 		return m.out_;
 	}
 
@@ -660,9 +659,8 @@ private:
 		// non-emulation state
 		ubyte[] ram; // 64K shared RAM between DSP and SMP
 		int mute_mask;
-		sample_t* out_;
-		sample_t* out_end;
-		sample_t* out_begin;
+		sample_t[] out_;
+		size_t initial_samples;
 		sample_t[extra_size] extra;
 	}
 
@@ -1146,7 +1144,7 @@ private:
 		m.t_echo_out[1] = r & ~1;
 	}
 
-	void echo_27() @system {
+	void echo_27() @safe {
 		// Output
 		int l = m.t_main_out[0];
 		int r = echo_output(1);
@@ -1164,17 +1162,14 @@ private:
 		static if (is(SPC_DSP_OUT_HOOK)) {
 			SPC_DSP_OUT_HOOK(l, r);
 		} else {
-			sample_t* out_ = m.out_;
+			sample_t[] out_ = m.out_;
 
 			{
 				out_[0] = cast(short) l;
 				out_[1] = cast(short) r;
-				out_ += 2;
-				if (out_ >= m.out_end) {
-					assert(out_ == m.out_end);
-					assert(m.out_end != &m.extra.ptr[extra_size] || (m.extra.ptr <= m.out_begin && m.extra.ptr < &m.extra.ptr[extra_size]));
-					out_ = m.extra.ptr;
-					m.out_end = &m.extra.ptr[extra_size];
+				out_ = out_[2 .. $];
+				if (out_.length == 0) {
+					out_ = m.extra;
 				}
 			}
 			m.out_ = out_;
