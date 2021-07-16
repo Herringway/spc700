@@ -57,7 +57,7 @@ void spc_init_rom(SNES_SPC* s, const(ubyte)[64] r) {
 /* Sets destination for output samples */
 alias spc_sample_t = short;
 void spc_set_output(SNES_SPC* s, spc_sample_t* p, int n) {
-	s.set_output(p, n);
+	s.set_output(p[0 .. n]);
 }
 
 /* Number of samples written to output since last set */
@@ -132,7 +132,7 @@ void spc_clear_echo(SNES_SPC* s) {
 /* Plays for count samples and write samples to out. Discards samples if out
 is NULL. Count must be a multiple of 2 since output is stereo. */
 const(char*) spc_play(SNES_SPC* s, int count, short* out_) {
-	return s.play(count, out_);
+	return s.play(out_[0 .. count]);
 }
 
 /* Skips count samples. Several times faster than spc_play(). */

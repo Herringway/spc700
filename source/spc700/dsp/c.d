@@ -44,7 +44,7 @@ void spc_dsp_init(SPC_DSP* s, void* ram_64k) {
 doesn't generate any. */
 alias spc_dsp_sample_t = short;
 void spc_dsp_set_output(SPC_DSP* s, spc_dsp_sample_t* p, int n) {
-	s.set_output(p, n);
+	s.set_output(p[0 .. n]);
 }
 
 /* Number of samples written to output since it was last set, always

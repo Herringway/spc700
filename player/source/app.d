@@ -37,7 +37,7 @@ bool initAudio(SDL_AudioCallback fun, ubyte channels, uint sampleRate, void* use
 extern (C) void _sampling_func(void* user, ubyte* buf, int bufSize) nothrow {
 	auto snes_spc = cast(SNES_SPC*)user;
 	/* Play into buffer */
-	snes_spc.play(bufSize / 2, cast(short*)buf );
+	snes_spc.play((cast(short*)buf)[0 .. bufSize / 2]);
 
 	/* Filter samples */
 	filter.run((cast(short*)buf)[0 .. bufSize /2]);

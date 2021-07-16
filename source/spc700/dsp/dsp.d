@@ -96,7 +96,7 @@ public:
 		m.ram = cast(ubyte[]) ram_64k;
 		mute_voices(0);
 		disable_surround(false);
-		set_output(null, 0);
+		set_output(null);
 		reset();
 
 		version (NDEBUG) {
@@ -123,15 +123,14 @@ public:
 	// Sets destination for output samples. If out is NULL or out_size is 0,
 	// doesn't generate any.
 	alias sample_t = short;
-	void set_output(sample_t* out_, int out_size) @system {
-		assert((out_size & 1) == 0); // must be even
+	void set_output(sample_t[] out_) @system {
+		assert((out_.length & 1) == 0); // must be even
 		if (!out_) {
-			out_ = &m.extra[0];
-			out_size = extra_size;
+			out_ = m.extra;
 		}
-		m.out_begin = out_;
-		m.out_ = out_;
-		m.out_end = out_ + out_size;
+		m.out_begin = out_.ptr;
+		m.out_ = out_.ptr;
+		m.out_end = out_.ptr + out_.length;
 	}
 
 	// Number of samples written to output since it was last set, always

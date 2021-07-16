@@ -126,33 +126,39 @@ public:
 
 	// Sets destination for output samples
 	alias sample_t = short;
-	void set_output(sample_t* out_, int size) @system {
-		assert((size & 1) == 0); // size must be even
+	void set_output(sample_t[] out_) @system {
+		assert((out_.length & 1) == 0); // size must be even
 
 		m.extra_clocks &= clocks_per_sample - 1;
 		if (out_) {
-			const(sample_t)* out_end = out_ + size;
-			m.buf_begin = out_;
+			const(sample_t)* out_end = &out_.ptr[out_.length];
+			m.buf_begin = out_.ptr;
 			m.buf_end = out_end;
 
 			// Copy extra to output
-			const(sample_t)* in_ = m.extra_buf.ptr;
-			while (in_ < m.extra_buf.ptr + m.extra_pos && out_ < out_end)
-				*out_++ = *in_++;
+			const(sample_t)[] in_ = m.extra_buf;
+			while (in_.ptr < m.extra_buf.ptr + m.extra_pos && out_.length > 0) {
+				out_[0] = in_[0];
+				out_ = out_[1 .. $];
+				in_ = in_[1 .. $];
+			}
 
 			// Handle output being full already
-			if (out_ >= out_end) {
+			if (out_.length == 0) {
 				// Have DSP write to remaining extra space
-				out_ = dsp.extra().ptr;
+				out_ = dsp.extra();
 				out_end = &dsp.extra()[extra_size];
 
 				// Copy any remaining extra samples as if DSP wrote them
-				while (in_ < m.extra_buf.ptr + m.extra_pos)
-					*out_++ = *in_++;
-				assert(out_ <= out_end);
+				while (in_.ptr < m.extra_buf.ptr + m.extra_pos) {
+					out_[0] = in_[0];
+					out_ = out_[1 .. $];
+					in_ = in_[1 .. $];
+				}
+				assert(out_.length == 0);
 			}
 
-			dsp.set_output(out_, cast(int)(out_end - out_));
+			dsp.set_output(out_);
 		} else {
 			reset_buf();
 		}
@@ -330,10 +336,23 @@ public:
 
 	// Plays for count samples and write samples to out. Discards samples if out
 	// is NULL. Count must be a multiple of 2 since output is stereo.
-	const(char)* play(int count, sample_t* out_) @system {
+	const(char)* play(sample_t[] out_) @system {
+		assert((out_.length & 1) == 0); // must be even
+		if (out_) {
+			set_output(out_);
+			end_frame(cast(int)(out_.length * (clocks_per_sample / 2)));
+		}
+
+		const char* err = m.cpu_error;
+		m.cpu_error = null;
+		return err;
+	}
+
+	const(char)* play(int count) @system {
 		assert((count & 1) == 0); // must be even
 		if (count) {
-			set_output(out_, count);
+			m.extra_clocks &= clocks_per_sample - 1;
+			reset_buf();
 			end_frame(count * (clocks_per_sample / 2));
 		}
 
@@ -369,7 +388,7 @@ public:
 			}
 		}
 
-		return play(count, null);
+		return play(count);
 	}
 
 	// State save/load (only available with accurate DSP)
@@ -657,7 +676,7 @@ private:
 		m.extra_pos = out_ - &m.extra_buf[0];
 		m.buf_begin = null;
 
-		dsp.set_output(null, 0);
+		dsp.set_output(null);
 	}
 
 	void save_extra() @system {
