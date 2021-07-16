@@ -105,7 +105,7 @@ public:
 		m.rom[0x3F] = 0xC0;
 
 		version (SPC_LESS_ACCURATE) {
-			memcpy(reg_times, reg_times_, reg_times.sizeof);
+			memcpy(reg_times.ptr, reg_times_.ptr, reg_times.sizeof);
 		}
 
 		reset();
@@ -346,7 +346,7 @@ public:
 	const(char)* skip(int count) @system {
 		version (SPC_LESS_ACCURATE) {
 			if (count > 2 * sample_rate * 2) {
-				set_output(0, 0);
+				set_output(null, 0);
 
 				// Skip a multiple of 4 samples
 				time_t end = count;
@@ -510,6 +510,7 @@ private:
 	SPC_DSP dsp;
 
 	version (SPC_LESS_ACCURATE) {
+		enum max_reg_time = 29;
 		static immutable byte[256] reg_times_ = [
 			-1, 0, -11, -10, -15, -11, -2, -2, 4, 3, 14, 14, 26, 26, 14, 22,
 			2, 3, 0, 1, -12, 0, 1, 1, 7, 6, 14, 14, 27, 14, 14, 23,
@@ -787,12 +788,6 @@ private:
 	}
 
 	void dsp_write(int data, rel_time_t time) @system {
-		int count = (time) - m.dsp_time;
-		if (count) {
-			assert(count > 0);
-			m.dsp_time = (time);
-			dsp.run(count);
-		}
 		version (SPC_LESS_ACCURATE) {
 			int count = (time) - (reg_times[m.smp_regs[0][r_dspaddr]]) - m.dsp_time;
 			if (count >= 0) {
@@ -809,8 +804,14 @@ private:
 					m.skipped_kon &= ~data;
 				}
 			}
+		} else {
+			int count = (time) - m.dsp_time;
+			if (count) {
+				assert(count > 0);
+				m.dsp_time = (time);
+				dsp.run(count);
+			}
 		}
-
 		static if (is(SPC_DSP_WRITE_HOOK)) {
 			SPC_DSP_WRITE_HOOK(m.spc_time + time, m.smp_regs[0][r_dspaddr], cast(ubyte) data);
 		}
