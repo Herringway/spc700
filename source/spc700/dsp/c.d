@@ -37,7 +37,7 @@ void spc_dsp_delete(SPC_DSP* s) {
 
 /* Initializes DSP and has it use the 64K RAM provided */
 void spc_dsp_init(SPC_DSP* s, void* ram_64k) {
-	s.init_((cast(ubyte*)ram_64k)[0 .. 0x10000]);
+	s.initialize((cast(ubyte*)ram_64k)[0 .. 0x10000]);
 }
 
 /* Sets destination for output samples. If out is NULL or out_size is 0,

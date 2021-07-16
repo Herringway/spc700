@@ -30,7 +30,7 @@ SNES_SPC* spc_new() {
 	}
 
 	SNES_SPC* s = manualAlloc!SNES_SPC();
-	if (s && s.init_()) {
+	if (s && s.initialize()) {
 		free(s);
 		s = null;
 	}

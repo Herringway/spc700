@@ -48,7 +48,7 @@ int main(string[] args)
 {
 	/* Create emulator and filter */
 	SNES_SPC snes_spc;
-	snes_spc.init_();
+	snes_spc.initialize();
 	filter = SPC_Filter();
 
 	/* Load SPC */

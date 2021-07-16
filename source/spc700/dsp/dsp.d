@@ -92,8 +92,8 @@ public:
 	// Setup
 
 	// Initializes DSP and has it use the 64K RAM provided
-	void init_(ubyte[] ram_64k) @system {
-		m.ram = cast(ubyte[]) ram_64k;
+	void initialize(ubyte[] ram_64k) @safe {
+		m.ram = ram_64k;
 		mute_voices(0);
 		disable_surround(false);
 		set_output(null);
