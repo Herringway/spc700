@@ -93,7 +93,7 @@ struct SNES_SPC {
 nothrow:
 public:
 	// Must be called once before using
-	const(char)* initialize() @safe {
+	const(char)* initialize() @system {
 		m = m.init;
 		dsp.initialize(m.ram.ram);
 
@@ -171,7 +171,7 @@ public:
 
 	// Resets SPC to power-on state. This resets your output buffer, so you must
 	// call set_output() after this.
-	void reset() @safe {
+	void reset() @system {
 		m.ram.ram = state_t.init.ram.ram;
 		ram_loaded();
 		reset_common(0x0F);
@@ -728,7 +728,7 @@ private:
 		timers_loaded();
 	}
 
-	void reset_time_regs() @safe {
+	void reset_time_regs() @system {
 		m.cpu_error = null;
 		m.echo_accessed = 0;
 		m.spc_time = 0;
@@ -749,7 +749,7 @@ private:
 		reset_buf();
 	}
 
-	void reset_common(int timer_counter_init) @safe {
+	void reset_common(int timer_counter_init) @system {
 		int i;
 		for (i = 0; i < timer_count; i++)
 			m.smp_regs[1][r_t0out + i] = cast(ubyte) timer_counter_init;

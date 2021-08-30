@@ -123,7 +123,7 @@ public:
 	// Sets destination for output samples. If out is NULL or out_size is 0,
 	// doesn't generate any.
 	alias sample_t = short;
-	void set_output(sample_t[] out_) @system {
+	void set_output(sample_t[] out_) @safe {
 		assert((out_.length & 1) == 0); // must be even
 		if (!out_) {
 			out_ = m.extra;
@@ -189,7 +189,7 @@ public:
 
 	// Runs DSP for specified number of clocks (~1024000 per second). Every 32 clocks
 	// a pair of samples is be generated.
-	void run(int clocks_remain) @system {
+	void run(int clocks_remain) @safe {
 		assert(clocks_remain > 0);
 
 		const int phase = m.phase;
@@ -209,77 +209,77 @@ public:
 				break;
 			goto case;
 		case 2:
-			voice_V7_V4_V1(&m.voices[0]);
+			voice_V7_V4_V1(m.voices[0 .. 4]);
 			if (3 && !--clocks_remain)
 				break;
 			goto case;
 		case 3:
-			voice_V8_V5_V2(&m.voices[0]);
+			voice_V8_V5_V2(m.voices[0 .. 3]);
 			if (4 && !--clocks_remain)
 				break;
 			goto case;
 		case 4:
-			voice_V9_V6_V3(&m.voices[0]);
+			voice_V9_V6_V3(m.voices[0 .. 3]);
 			if (5 && !--clocks_remain)
 				break;
 			goto case;
 		case 5:
-			voice_V7_V4_V1(&m.voices[1]);
+			voice_V7_V4_V1(m.voices[1 .. 5]);
 			if (6 && !--clocks_remain)
 				break;
 			goto case;
 		case 6:
-			voice_V8_V5_V2(&m.voices[1]);
+			voice_V8_V5_V2(m.voices[1 .. 4]);
 			if (7 && !--clocks_remain)
 				break;
 			goto case;
 		case 7:
-			voice_V9_V6_V3(&m.voices[1]);
+			voice_V9_V6_V3(m.voices[1 .. 4]);
 			if (8 && !--clocks_remain)
 				break;
 			goto case;
 		case 8:
-			voice_V7_V4_V1(&m.voices[2]);
+			voice_V7_V4_V1(m.voices[2 .. 6]);
 			if (9 && !--clocks_remain)
 				break;
 			goto case;
 		case 9:
-			voice_V8_V5_V2(&m.voices[2]);
+			voice_V8_V5_V2(m.voices[2 .. 5]);
 			if (10 && !--clocks_remain)
 				break;
 			goto case;
 		case 10:
-			voice_V9_V6_V3(&m.voices[2]);
+			voice_V9_V6_V3(m.voices[2 .. 5]);
 			if (11 && !--clocks_remain)
 				break;
 			goto case;
 		case 11:
-			voice_V7_V4_V1(&m.voices[3]);
+			voice_V7_V4_V1(m.voices[3 .. 7]);
 			if (12 && !--clocks_remain)
 				break;
 			goto case;
 		case 12:
-			voice_V8_V5_V2(&m.voices[3]);
+			voice_V8_V5_V2(m.voices[3 .. 6]);
 			if (13 && !--clocks_remain)
 				break;
 			goto case;
 		case 13:
-			voice_V9_V6_V3(&m.voices[3]);
+			voice_V9_V6_V3(m.voices[3 .. 6]);
 			if (14 && !--clocks_remain)
 				break;
 			goto case;
 		case 14:
-			voice_V7_V4_V1(&m.voices[4]);
+			voice_V7_V4_V1(m.voices[4 .. 8]);
 			if (15 && !--clocks_remain)
 				break;
 			goto case;
 		case 15:
-			voice_V8_V5_V2(&m.voices[4]);
+			voice_V8_V5_V2(m.voices[4 .. 7]);
 			if (16 && !--clocks_remain)
 				break;
 			goto case;
 		case 16:
-			voice_V9_V6_V3(&m.voices[4]);
+			voice_V9_V6_V3(m.voices[4 .. 7]);
 			if (17 && !--clocks_remain)
 				break;
 			goto case;
@@ -291,12 +291,12 @@ public:
 				break;
 			goto case;
 		case 18:
-			voice_V8_V5_V2(&m.voices[5]);
+			voice_V8_V5_V2(m.voices[5 .. 8]);
 			if (19 && !--clocks_remain)
 				break;
 			goto case;
 		case 19:
-			voice_V9_V6_V3(&m.voices[5]);
+			voice_V9_V6_V3(m.voices[5 .. 8]);
 			if (20 && !--clocks_remain)
 				break;
 			goto case;
@@ -679,13 +679,13 @@ private:
 		return (cast(uint) m.counter + counter_offsets[rate]) % counter_rates[rate];
 	}
 
-	int interpolate(const(voice_t)* v) @system {
+	int interpolate(const(voice_t)* v) @safe {
 		// Make pointers into gaussian based on fractional position between samples
 		int offset = v.interp_pos >> 4 & 0xFF;
-		const(short)* fwd = &gauss[255 - offset];
-		const(short)* rev = &gauss[offset]; // mirror left half of gaussian
+		const(short)[] fwd = gauss[255 - offset .. 512 - offset];
+		const(short)[] rev = gauss[offset .. offset + 257]; // mirror left half of gaussian
 
-		const(int)* in_ = &v.buf[(v.interp_pos >> 12) + v.buf_pos];
+		const(int)[] in_ = v.buf[(v.interp_pos >> 12) + v.buf_pos .. $];
 		int out_;
 		out_ = (fwd[0] * in_[0]) >> 11;
 		out_ += (fwd[256] * in_[1]) >> 11;
@@ -767,20 +767,20 @@ private:
 		}
 	}
 
-	void decode_brr(voice_t* v) @system {
+	void decode_brr(voice_t* v) @safe {
 		// Arrange the four input nybbles in 0xABCD order for easy decoding
 		int nybbles = m.t_brr_byte * 0x100 + m.ram[(v.brr_addr + v.brr_offset + 1) & 0xFFFF];
 
 		const int header = m.t_brr_header;
 
 		// Write to next four samples in circular buffer
-		int* pos = &v.buf[v.buf_pos];
+		int[] pos = v.buf[v.buf_pos .. $];
 		int* end;
 		if ((v.buf_pos += 4) >= brr_buf_size)
 			v.buf_pos = 0;
 
 		// Decode four samples
-		for (end = pos + 4; pos < end; pos++, nybbles <<= 4) {
+		for (end = &pos[4]; &pos[0] < end; pos = pos[1 .. $], nybbles <<= 4) {
 			// Extract nybble and sign-extend
 			int s = cast(short) nybbles >> 12;
 
@@ -869,12 +869,12 @@ private:
 		m.t_srcn = v.regs[v_srcn];
 	}
 
-	void voice_V2(voice_t* v) {
+	void voice_V2(voice_t* v) @safe {
 		// Read sample pointer (ignored if not needed)
-		const(ubyte)* entry = &m.ram[m.t_dir_addr];
+		const(ubyte)[] entry = m.ram[m.t_dir_addr .. $];
 		if (!v.kon_delay)
-			entry += 2;
-		m.t_brr_next_addr = *cast(ushort*)(entry);
+			entry = entry[2 .. $];
+		m.t_brr_next_addr = (cast(const(ushort)[])entry)[0];
 
 		m.t_adsr0 = v.regs[v_adsr0];
 
@@ -882,7 +882,7 @@ private:
 		m.t_pitch = v.regs[v_pitchl];
 	}
 	// Most voices do all these in one clock, so make a handy composite
-	void voice_V3(voice_t* v) @system {
+	void voice_V3(voice_t* v) @safe {
 		voice_V3a(v);
 		voice_V3b(v);
 		voice_V3c(v);
@@ -898,7 +898,7 @@ private:
 		m.t_brr_header = m.ram[v.brr_addr]; // brr_addr doesn't need masking
 	}
 
-	void voice_V3c(voice_t* v) @system {
+	void voice_V3c(voice_t* v) @safe {
 		// Pitch modulation using previous voice's output
 		if (m.t_pmon & v.vbit)
 			m.t_pitch += ((m.t_output >> 5) * m.t_pitch) >> 10;
@@ -962,7 +962,7 @@ private:
 			run_envelope(v);
 	}
 
-	void voice_V4(voice_t* v) @system {
+	void voice_V4(voice_t* v) @safe {
 		// Decode BRR
 		m.t_looped = 0;
 		if (v.interp_pos >= 0x4000) {
@@ -1026,27 +1026,27 @@ private:
 	}
 	// Common combinations of voice steps on different voices. This greatly reduces
 	// code size and allows everything to be inlined in these functions.
-	void voice_V7_V4_V1(voice_t* v) @system {
-		voice_V7(v);
-		voice_V1(v + 3);
-		voice_V4(v + 1);
+	void voice_V7_V4_V1(voice_t[] v) @safe {
+		voice_V7(&v[0]);
+		voice_V1(&v[3]);
+		voice_V4(&v[1]);
 	}
 
-	void voice_V8_V5_V2(voice_t* v) @system {
-		voice_V8(v);
-		voice_V5(v + 1);
-		voice_V2(v + 2);
+	void voice_V8_V5_V2(voice_t[] v) @safe {
+		voice_V8(&v[0]);
+		voice_V5(&v[1]);
+		voice_V2(&v[2]);
 	}
 
-	void voice_V9_V6_V3(voice_t* v) @system {
-		voice_V9(v);
-		voice_V6(v + 1);
-		voice_V3(v + 2);
+	void voice_V9_V6_V3(voice_t[] v) @safe {
+		voice_V9(&v[0]);
+		voice_V6(&v[1]);
+		voice_V3(&v[2]);
 	}
 
 	// Current echo buffer pointer for left/right channel
-	auto ECHO_PTR(int ch) @safe {
-		return &m.ram[m.t_echo_ptr + ch * 2];
+	ushort[] ECHO_PTR(int ch) @safe {
+		return (cast(ushort[])m.ram[m.t_echo_ptr + ch * 2 .. m.t_echo_ptr + ch * 2 + 2]);
 	}
 
 	// Sample in echo history buffer, where 0 is the oldest
@@ -1059,8 +1059,8 @@ private:
 		return (ECHO_FIR(i + 1)[ch] * cast(byte) m.regs[r_fir + i * 0x10]) >> 6;
 	}
 
-	void echo_read(int ch) @system {
-		int s = cast(short)*cast(ushort*)(ECHO_PTR(ch));
+	void echo_read(int ch) @safe {
+		int s = cast(short)(ECHO_PTR(ch)[0]);
 		// second copy simplifies wrap-around handling
 		ECHO_FIR(0)[ch] = ECHO_FIR(8)[ch] = s >> 1;
 	}
@@ -1071,13 +1071,13 @@ private:
 		return out_;
 	}
 
-	void echo_write(int ch) @system {
+	void echo_write(int ch) @safe {
 		if (!(m.t_echo_enabled & 0x20))
-			*cast(ushort*) ECHO_PTR(ch) = cast(ushort) m.t_echo_out[ch];
+			ECHO_PTR(ch)[0] = cast(ushort) m.t_echo_out[ch];
 		m.t_echo_out[ch] = 0;
 	}
 
-	void echo_22() @system {
+	void echo_22() @safe {
 		// History
 		if (++m.echo_hist_pos >= echo_hist_size)
 			m.echo_hist_pos = 0;
@@ -1093,7 +1093,7 @@ private:
 		m.t_echo_in[1] = r;
 	}
 
-	void echo_23() @system {
+	void echo_23() @safe {
 		int l = CALC_FIR(1, 0) + CALC_FIR(2, 0);
 		int r = CALC_FIR(1, 1) + CALC_FIR(2, 1);
 
@@ -1180,7 +1180,7 @@ private:
 		m.t_echo_enabled = m.regs[r_flg];
 	}
 
-	void echo_29() @system {
+	void echo_29() @safe {
 		m.t_esa = m.regs[r_esa];
 
 		if (!m.echo_offset)
@@ -1196,7 +1196,7 @@ private:
 		m.t_echo_enabled = m.regs[r_flg];
 	}
 
-	void echo_30() @system {
+	void echo_30() @safe {
 		// Write right echo
 		echo_write(1);
 	}
