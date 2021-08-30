@@ -13,8 +13,8 @@ const int cpu_lag_max = 12 - 1; // DIV YA,X takes 12 clocks
 
 enum SPC_MORE_ACCURACY = 0;
 
-uint get_le16(const void* p) nothrow {
-	return cast(uint)(cast(const ubyte*) p)[1] << 8 | cast(uint)(cast(const ubyte*) p)[0];
+uint get_le16(const ubyte[] p) @safe nothrow {
+	return cast(uint)p[1] << 8 | cast(uint)p[0];
 }
 
 immutable int bits_in_int = 8 * int.sizeof;
@@ -93,7 +93,7 @@ struct SNES_SPC {
 nothrow:
 public:
 	// Must be called once before using
-	const(char)* initialize() @system {
+	const(char)* initialize() @safe {
 		m = m.init;
 		dsp.initialize(m.ram.ram);
 
@@ -132,12 +132,12 @@ public:
 		m.extra_clocks &= clocks_per_sample - 1;
 		if (out_) {
 			const(sample_t)* out_end = &out_.ptr[out_.length];
-			m.buf_begin = out_.ptr;
+			m.buf_begin = &out_[0];
 			m.buf_end = out_end;
 
 			// Copy extra to output
 			const(sample_t)[] in_ = m.extra_buf;
-			while (in_.ptr < m.extra_buf.ptr + m.extra_pos && out_.length > 0) {
+			while (in_.ptr < &m.extra_buf[0] + m.extra_pos && out_.length > 0) {
 				out_[0] = in_[0];
 				out_ = out_[1 .. $];
 				in_ = in_[1 .. $];
@@ -150,7 +150,7 @@ public:
 				out_end = &dsp.extra()[extra_size];
 
 				// Copy any remaining extra samples as if DSP wrote them
-				while (in_.ptr < m.extra_buf.ptr + m.extra_pos) {
+				while (in_.ptr < &m.extra_buf[0] + m.extra_pos) {
 					out_[0] = in_[0];
 					out_ = out_[1 .. $];
 					in_ = in_[1 .. $];
@@ -171,7 +171,7 @@ public:
 
 	// Resets SPC to power-on state. This resets your output buffer, so you must
 	// call set_output() after this.
-	void reset() @system {
+	void reset() @safe {
 		m.ram.ram = state_t.init.ram.ram;
 		ram_loaded();
 		reset_common(0x0F);
@@ -180,7 +180,7 @@ public:
 
 	// Emulates pressing reset switch on SNES. This resets your output buffer, so
 	// you must call set_output() after this.
-	void soft_reset() @system {
+	void soft_reset() @safe {
 		reset_common(0);
 		dsp.soft_reset();
 	}
@@ -290,18 +290,18 @@ public:
 	// Loads SPC data into emulator
 	enum spc_min_file_size = 0x10180;
 	enum spc_file_size = 0x10200;
-	const(char)* load_spc(const(void)[] data) @system {
-		const spc_file_t* spc = cast(const(spc_file_t)*) data.ptr;
+	const(char)* load_spc(const(void)[] data) @safe {
+		if (data.length < spc_min_file_size)
+			return "Corrupt SPC file";
+		const spc_file_t* spc = &(cast(const(spc_file_t)[])data[0 .. spc_file_t.sizeof])[0];
 
 		// be sure compiler didn't insert any padding into fle_t
 		assert(spc_file_t.sizeof == spc_min_file_size + 0x80);
 
 		// Check signature and file size
-		if (data.length < signature_size || memcmp(spc, spcSignature.ptr, 27))
+		if (spc.signature != spcSignature)
 			return "Not an SPC file";
 
-		if (data.length < spc_min_file_size)
-			return "Corrupt SPC file";
 
 		// CPU registers
 		m.cpu_regs.pc = spc.pch * 0x100 + spc.pcl;
@@ -312,7 +312,7 @@ public:
 		m.cpu_regs.sp = spc.sp;
 
 		// RAM and registers
-		memcpy(m.ram.ram.ptr, spc.ram.ptr, 0x10000);
+		m.ram.ram[] = spc.ram;
 		ram_loaded();
 
 		// DSP registers
@@ -667,13 +667,15 @@ private:
 		}
 	}
 
-	void reset_buf() @system {
+	void reset_buf() @safe {
 		// Start with half extra buffer of silence
-		sample_t* out_ = &m.extra_buf[0];
-		while (out_ < &m.extra_buf[extra_size / 2])
-			*out_++ = 0;
+		sample_t[] out_ = m.extra_buf[0 .. extra_size / 2];
+		while (out_.length > 0) {
+			out_[0] = 0;
+			out_ = out_[1 .. $];
+		}
 
-		m.extra_pos = out_ - &m.extra_buf[0];
+		m.extra_pos = &m.extra_buf[0] - &m.extra_buf[extra_size / 2];
 		m.buf_begin = null;
 
 		dsp.set_output(null);
@@ -682,21 +684,21 @@ private:
 	void save_extra() @system {
 		// Get end pointers
 		const(sample_t)* main_end = m.buf_end; // end of data written to buf
-		const(sample_t)* dsp_end = dsp.out_pos().ptr; // end of data written to dsp.extra()
+		const(sample_t)* dsp_end = &dsp.out_pos()[0]; // end of data written to dsp.extra()
 		if (m.buf_begin <= dsp_end && dsp_end <= main_end) {
 			main_end = dsp_end;
-			dsp_end = dsp.extra().ptr; // nothing in DSP's extra
+			dsp_end = &dsp.extra()[0]; // nothing in DSP's extra
 		}
 
 		// Copy any extra samples at these ends into extra_buf
-		sample_t* out_ = m.extra_buf.ptr;
+		sample_t* out_ = &m.extra_buf[0];
 		const(sample_t)* in_;
 		for (in_ = m.buf_begin + sample_count(); in_ < main_end; in_++)
 			*out_++ = *in_;
-		for (in_ = dsp.extra().ptr; in_ < dsp_end; in_++)
+		for (in_ = &dsp.extra()[0]; in_ < dsp_end; in_++)
 			*out_++ = *in_;
 
-		m.extra_pos = out_ - m.extra_buf.ptr;
+		m.extra_pos = out_ - &m.extra_buf[0];
 		assert(out_ <= &m.extra_buf.ptr[extra_size]);
 	}
 	// Loads registers from unified 16-byte format
@@ -728,7 +730,7 @@ private:
 		timers_loaded();
 	}
 
-	void reset_time_regs() @system {
+	void reset_time_regs() @safe {
 		m.cpu_error = null;
 		m.echo_accessed = 0;
 		m.spc_time = 0;
@@ -749,7 +751,7 @@ private:
 		reset_buf();
 	}
 
-	void reset_common(int timer_counter_init) @system {
+	void reset_common(int timer_counter_init) @safe {
 		int i;
 		for (i = 0; i < timer_count; i++)
 			m.smp_regs[1][r_t0out + i] = cast(ubyte) timer_counter_init;
@@ -791,7 +793,7 @@ private:
 		return t;
 	}
 
-	int dsp_read(rel_time_t time) @system {
+	int dsp_read(rel_time_t time) @safe {
 		{
 			int count = (time) - m.dsp_time;
 			if (count) {
@@ -806,7 +808,7 @@ private:
 		return result;
 	}
 
-	void dsp_write(int data, rel_time_t time) @system {
+	void dsp_write(int data, rel_time_t time) @safe {
 		version (SPC_LESS_ACCURATE) {
 			int count = (time) - (reg_times[m.smp_regs[0][r_dspaddr]]) - m.dsp_time;
 			if (count >= 0) {
@@ -934,14 +936,14 @@ private:
 		}
 	}
 
-	void cpu_write_smp_reg(int data, rel_time_t time, int addr) @system {
+	void cpu_write_smp_reg(int data, rel_time_t time, int addr) @safe {
 		if (addr == r_dspdata) // 99%
 			dsp_write(data, time);
 		else
 			cpu_write_smp_reg_(data, time, addr);
 	}
 
-	void cpu_write_high(int data, int i, rel_time_t time) @system {
+	void cpu_write_high(int data, int i, rel_time_t time) @safe {
 		if (i < rom_size) {
 			m.hi_ram[i] = cast(ubyte) data;
 			if (m.rom_enabled)
@@ -953,7 +955,7 @@ private:
 		}
 	}
 
-	void cpu_write(int data, int addr, rel_time_t time) @system {
+	void cpu_write(int data, int addr, rel_time_t time) @safe {
 		version (SPC_MORE_ACCURACY) {
 			if (time >= m.dsp_time) {
 				int count = (time) - m.dsp_time;
@@ -998,7 +1000,7 @@ private:
 		}
 	}
 
-	int cpu_read_smp_reg(int reg, rel_time_t time) @system {
+	int cpu_read_smp_reg(int reg, rel_time_t time) @safe {
 		int result = m.smp_regs[1][reg];
 		reg -= r_dspaddr;
 		// DSP addr and data
@@ -1011,7 +1013,7 @@ private:
 		return result;
 	}
 
-	int cpu_read(int addr, rel_time_t time) @system {
+	int cpu_read(int addr, rel_time_t time) @safe {
 		version (SPC_MORE_ACCURACY) {
 			if (time >= m.dsp_time) {
 				int count = (time) - m.dsp_time;
@@ -1057,7 +1059,7 @@ private:
 		return result;
 	}
 
-	uint CPU_mem_bit(const(ubyte)* pc, rel_time_t rel_time) @system {
+	uint CPU_mem_bit(const(ubyte)[] pc, rel_time_t rel_time) @safe {
 		uint addr = get_le16(pc);
 		uint t = cpu_read((addr & 0x1FFF), rel_time + (0)) >> (addr >> 13);
 		return t << 8 & 0x100;
@@ -2420,27 +2422,27 @@ private:
 					goto loop;
 
 				case 0x4A: // AND1 C,mem.bit
-					c &= CPU_mem_bit(pc, rel_time + 0);
+					c &= CPU_mem_bit(pc[0 .. 2], rel_time + 0);
 					pc += 2;
 					goto loop;
 
 				case 0x6A: // AND1 C,/mem.bit
-					c &= ~CPU_mem_bit(pc, rel_time + 0);
+					c &= ~CPU_mem_bit(pc[0 .. 2], rel_time + 0);
 					pc += 2;
 					goto loop;
 
 				case 0x0A: // OR1 C,mem.bit
-					c |= CPU_mem_bit(pc, rel_time - 1);
+					c |= CPU_mem_bit(pc[0 .. 2], rel_time - 1);
 					pc += 2;
 					goto loop;
 
 				case 0x2A: // OR1 C,/mem.bit
-					c |= ~CPU_mem_bit(pc, rel_time - 1);
+					c |= ~CPU_mem_bit(pc[0 .. 2], rel_time - 1);
 					pc += 2;
 					goto loop;
 
 				case 0x8A: // EOR1 C,mem.bit
-					c ^= CPU_mem_bit(pc, rel_time - 1);
+					c ^= CPU_mem_bit(pc[0 .. 2], rel_time - 1);
 					pc += 2;
 					goto loop;
 
@@ -2466,7 +2468,7 @@ private:
 					goto loop;
 
 				case 0xAA: // MOV1 C,mem.bit
-					c = CPU_mem_bit(pc, rel_time);
+					c = CPU_mem_bit(pc[0 .. 2], rel_time);
 					pc += 2;
 					goto loop;
 
