@@ -141,9 +141,9 @@ const(char*) spc_skip(SNES_SPC* s, int count) {
 
 /* Saves/loads exact emulator state */
 enum spc_state_size = 67 * 1024L; /* maximum space needed when saving */
-alias spc_copy_func_t = void function(ubyte** io, void* state, size_t) @safe nothrow;
+alias spc_copy_func_t = void function(ubyte** io, scope void* state, size_t) @safe nothrow;
 void spc_copy_state(SNES_SPC* s, ubyte** p, spc_copy_func_t f) {
-	void delegate(ubyte**, void[]) @safe nothrow dg = (ubyte** io, void[] state) { f(io, &state[0], state.length); };
+	SPC_DSP.copy_func_t dg = (ubyte** io, scope void[] state) { f(io, &state[0], state.length); };
 	s.copy_state(p, dg);
 }
 /* Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.

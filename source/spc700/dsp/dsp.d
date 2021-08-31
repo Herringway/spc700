@@ -415,7 +415,7 @@ public:
 
 	// Saves/loads exact emulator state
 	enum state_size = 640; // maximum space needed when saving
-	alias copy_func_t = void delegate(ubyte** io, void[] state) @safe nothrow;
+	alias copy_func_t = void delegate(ubyte** io, scope void[] state) @safe nothrow;
 	void copy_state(ubyte** io, copy_func_t copy) @safe {
 		SPC_State_Copier copier = SPC_State_Copier(io, copy);
 
@@ -1219,7 +1219,7 @@ public:
 		buf = p;
 	}
 
-	final void copy(void[] state) @safe {
+	final void copy(scope void[] state) @safe {
 		func(buf, state);
 	}
 

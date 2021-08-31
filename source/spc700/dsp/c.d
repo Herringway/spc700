@@ -103,9 +103,9 @@ void spc_dsp_load(SPC_DSP* s, ref const(ubyte)[spc_dsp_register_count] regs) {
 
 /* Saves/loads exact emulator state (accurate DSP only) */
 enum spc_dsp_state_size = 640; /* maximum space needed when saving */
-alias spc_dsp_copy_func_t = void function(ubyte** io, void* state, size_t) @trusted nothrow;
+alias spc_dsp_copy_func_t = void function(ubyte** io, scope void* state, size_t) @trusted nothrow;
 void spc_dsp_copy_state(SPC_DSP* s, ubyte** p, spc_dsp_copy_func_t f) {
-	void delegate(ubyte**, void[]) @safe nothrow dg = (ubyte** io, void[] state) { f(io, &state[0], state.length); };
+	SPC_DSP.copy_func_t dg = (ubyte** io, scope void[] state) { f(io, &state[0], state.length); };
 	s.copy_state(p, dg);
 }
 
