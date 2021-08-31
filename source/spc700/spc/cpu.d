@@ -675,7 +675,7 @@ private:
 			out_ = out_[1 .. $];
 		}
 
-		m.extra_pos = &m.extra_buf[0] - &m.extra_buf[extra_size / 2];
+		m.extra_pos = extra_size / 2;
 		m.buf_begin = null;
 
 		dsp.set_output(null);
