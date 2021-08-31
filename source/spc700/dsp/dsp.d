@@ -194,14 +194,14 @@ public:
 		switch (phase) {
 		loop:
 		case 0:
-			voice_V5(&m.voices[0]);
-			voice_V2(&m.voices[1]);
+			voice_V5(m.voices[0]);
+			voice_V2(m.voices[1]);
 			if (1 && !--clocks_remain)
 				break;
 			goto case;
 		case 1:
-			voice_V6(&m.voices[0]);
-			voice_V3(&m.voices[1]);
+			voice_V6(m.voices[0]);
+			voice_V3(m.voices[1]);
 			if (2 && !--clocks_remain)
 				break;
 			goto case;
@@ -281,9 +281,9 @@ public:
 				break;
 			goto case;
 		case 17:
-			voice_V1(&m.voices[0]);
-			voice_V7(&m.voices[5]);
-			voice_V4(&m.voices[6]);
+			voice_V1(m.voices[0]);
+			voice_V7(m.voices[5]);
+			voice_V4(m.voices[6]);
 			if (18 && !--clocks_remain)
 				break;
 			goto case;
@@ -298,42 +298,42 @@ public:
 				break;
 			goto case;
 		case 20:
-			voice_V1(&m.voices[1]);
-			voice_V7(&m.voices[6]);
-			voice_V4(&m.voices[7]);
+			voice_V1(m.voices[1]);
+			voice_V7(m.voices[6]);
+			voice_V4(m.voices[7]);
 			if (21 && !--clocks_remain)
 				break;
 			goto case;
 		case 21:
-			voice_V8(&m.voices[6]);
-			voice_V5(&m.voices[7]);
-			voice_V2(&m.voices[0]); /* t_brr_next_addr order dependency */
+			voice_V8(m.voices[6]);
+			voice_V5(m.voices[7]);
+			voice_V2(m.voices[0]); /* t_brr_next_addr order dependency */
 			if (22 && !--clocks_remain)
 				break;
 			goto case;
 		case 22:
-			voice_V3a(&m.voices[0]);
-			voice_V9(&m.voices[6]);
-			voice_V6(&m.voices[7]);
+			voice_V3a(m.voices[0]);
+			voice_V9(m.voices[6]);
+			voice_V6(m.voices[7]);
 			echo_22();
 			if (23 && !--clocks_remain)
 				break;
 			goto case;
 		case 23:
-			voice_V7(&m.voices[7]);
+			voice_V7(m.voices[7]);
 			echo_23();
 			if (24 && !--clocks_remain)
 				break;
 			goto case;
 		case 24:
-			voice_V8(&m.voices[7]);
+			voice_V8(m.voices[7]);
 			echo_24();
 			if (25 && !--clocks_remain)
 				break;
 			goto case;
 		case 25:
-			voice_V3b(&m.voices[0]);
-			voice_V9(&m.voices[7]);
+			voice_V3b(m.voices[0]);
+			voice_V9(m.voices[7]);
 			echo_25();
 			if (26 && !--clocks_remain)
 				break;
@@ -363,14 +363,14 @@ public:
 			goto case;
 		case 30:
 			misc_30();
-			voice_V3c(&m.voices[0]);
+			voice_V3c(m.voices[0]);
 			echo_30();
 			if (31 && !--clocks_remain)
 				break;
 			goto case;
 		case 31:
-			voice_V4(&m.voices[0]);
-			voice_V1(&m.voices[2]);
+			voice_V4(m.voices[0]);
+			voice_V1(m.voices[2]);
 			goto default;
 		default:
 			if (--clocks_remain)
@@ -674,7 +674,7 @@ private:
 		return (cast(uint) m.counter + counter_offsets[rate]) % counter_rates[rate];
 	}
 
-	int interpolate(const(voice_t)* v) @safe {
+	int interpolate(const ref voice_t v) @safe {
 		// Make pointers into gaussian based on fractional position between samples
 		int offset = v.interp_pos >> 4 & 0xFF;
 		const(short)[] fwd = gauss[255 - offset .. 512 - offset];
@@ -693,7 +693,7 @@ private:
 		return out_;
 	}
 
-	void run_envelope(voice_t* v) @safe {
+	void run_envelope(ref voice_t v) @safe {
 		int env = v.env;
 		if (v.env_mode == env_mode_t.env_release) // 60%
 		{
@@ -762,7 +762,7 @@ private:
 		}
 	}
 
-	void decode_brr(voice_t* v) @safe {
+	void decode_brr(ref voice_t v) @safe {
 		// Arrange the four input nybbles in 0xABCD order for easy decoding
 		int nybbles = m.t_brr_byte * 0x100 + m.ram[(v.brr_addr + v.brr_offset + 1) & 0xFFFF];
 
@@ -844,7 +844,7 @@ private:
 		}
 	}
 
-	void voice_output(const(voice_t)* v, int ch) @safe {
+	void voice_output(const ref voice_t v, int ch) @safe {
 		// Apply left/right volume
 		int amp = (m.t_output * cast(byte) v.regs[v_voll + ch]) >> 7;
 
@@ -859,12 +859,12 @@ private:
 		}
 	}
 
-	void voice_V1(voice_t* v) @safe {
+	void voice_V1(ref voice_t v) @safe {
 		m.t_dir_addr = m.t_dir * 0x100 + m.t_srcn * 4;
 		m.t_srcn = v.regs[v_srcn];
 	}
 
-	void voice_V2(voice_t* v) @safe {
+	void voice_V2(ref voice_t v) @safe {
 		// Read sample pointer (ignored if not needed)
 		const(ubyte)[] entry = m.ram[m.t_dir_addr .. $];
 		if (!v.kon_delay)
@@ -877,23 +877,23 @@ private:
 		m.t_pitch = v.regs[v_pitchl];
 	}
 	// Most voices do all these in one clock, so make a handy composite
-	void voice_V3(voice_t* v) @safe {
+	void voice_V3(ref voice_t v) @safe {
 		voice_V3a(v);
 		voice_V3b(v);
 		voice_V3c(v);
 	}
 
-	void voice_V3a(voice_t* v) @safe {
+	void voice_V3a(ref voice_t v) @safe {
 		m.t_pitch += (v.regs[v_pitchh] & 0x3F) << 8;
 	}
 
-	void voice_V3b(voice_t* v) @safe {
+	void voice_V3b(ref voice_t v) @safe {
 		// Read BRR header and byte
 		m.t_brr_byte = m.ram[(v.brr_addr + v.brr_offset) & 0xFFFF];
 		m.t_brr_header = m.ram[v.brr_addr]; // brr_addr doesn't need masking
 	}
 
-	void voice_V3c(voice_t* v) @safe {
+	void voice_V3c(ref voice_t v) @safe {
 		// Pitch modulation using previous voice's output
 		if (m.t_pmon & v.vbit)
 			m.t_pitch += ((m.t_output >> 5) * m.t_pitch) >> 10;
@@ -957,7 +957,7 @@ private:
 			run_envelope(v);
 	}
 
-	void voice_V4(voice_t* v) @safe {
+	void voice_V4(ref voice_t v) @safe {
 		// Decode BRR
 		m.t_looped = 0;
 		if (v.interp_pos >= 0x4000) {
@@ -986,7 +986,7 @@ private:
 		voice_output(v, 0);
 	}
 
-	void voice_V5(voice_t* v) @safe {
+	void voice_V5(ref voice_t v) @safe {
 		// Output right
 		voice_output(v, 1);
 
@@ -999,44 +999,44 @@ private:
 		m.endx_buf = cast(ubyte) endx_buf;
 	}
 
-	void voice_V6(voice_t*) @safe {
+	void voice_V6(ref voice_t) @safe {
 		m.outx_buf = cast(ubyte)(m.t_output >> 8);
 	}
 
-	void voice_V7(voice_t* v) @safe {
+	void voice_V7(ref voice_t v) @safe {
 		// Update ENDX
 		m.regs[r_endx] = m.endx_buf;
 
 		m.envx_buf = v.t_envx_out;
 	}
 
-	void voice_V8(voice_t* v) @safe {
+	void voice_V8(ref voice_t v) @safe {
 		// Update OUTX
 		v.regs[v_outx] = m.outx_buf;
 	}
 
-	void voice_V9(voice_t* v) @safe {
+	void voice_V9(ref voice_t v) @safe {
 		// Update ENVX
 		v.regs[v_envx] = m.envx_buf;
 	}
 	// Common combinations of voice steps on different voices. This greatly reduces
 	// code size and allows everything to be inlined in these functions.
 	void voice_V7_V4_V1(voice_t[] v) @safe {
-		voice_V7(&v[0]);
-		voice_V1(&v[3]);
-		voice_V4(&v[1]);
+		voice_V7(v[0]);
+		voice_V1(v[3]);
+		voice_V4(v[1]);
 	}
 
 	void voice_V8_V5_V2(voice_t[] v) @safe {
-		voice_V8(&v[0]);
-		voice_V5(&v[1]);
-		voice_V2(&v[2]);
+		voice_V8(v[0]);
+		voice_V5(v[1]);
+		voice_V2(v[2]);
 	}
 
 	void voice_V9_V6_V3(voice_t[] v) @safe {
-		voice_V9(&v[0]);
-		voice_V6(&v[1]);
-		voice_V3(&v[2]);
+		voice_V9(v[0]);
+		voice_V6(v[1]);
+		voice_V3(v[2]);
 	}
 
 	// Current echo buffer pointer for left/right channel
