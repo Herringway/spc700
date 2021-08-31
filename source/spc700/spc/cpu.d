@@ -192,12 +192,12 @@ public:
 
 	// Emulated port read/write at specified time
 	enum port_count = 4;
-	int read_port(time_t t, int port) @system {
+	int read_port(time_t t, int port) @safe {
 		assert(cast(uint) port < port_count);
 		return run_until_(t)[port];
 	}
 
-	void write_port(time_t t, int port, int data) @system {
+	void write_port(time_t t, int port, int data) @safe {
 		assert(cast(uint) port < port_count);
 		run_until_(t)[0x10 + port] = cast(ubyte) data;
 	}
@@ -1080,7 +1080,7 @@ private:
 		return false;
 	}
 
-	ubyte* run_until_(time_t end_time) return nothrow @system {
+	ubyte[] run_until_(time_t end_time) return nothrow @safe {
 		rel_time_t rel_time = m.spc_time - end_time;
 		assert(rel_time <= 0);
 		m.spc_time = end_time;
@@ -1090,19 +1090,19 @@ private:
 		m.timers[2].next_time += rel_time;
 
 		{
-			ubyte* ram = m.ram.ram.ptr;
+			ubyte[] ram = m.ram.ram;
 			int a = m.cpu_regs.a;
 			int x = m.cpu_regs.x;
 			int y = m.cpu_regs.y;
-			const(ubyte)* pc;
-			ubyte* sp;
+			ushort pc;
+			ushort sp;
 			int psw;
 			int c;
 			int nz;
 			int dp;
 
-			(pc = ram + (m.cpu_regs.pc));
-			(sp = ram + 0x101 + (m.cpu_regs.sp));
+			pc = cast(ushort)m.cpu_regs.pc;
+			sp = cast(ushort)(0x101 + m.cpu_regs.sp);
 			{
 				psw = m.cpu_regs.psw;
 				c = m.cpu_regs.psw << 8;
@@ -1115,7 +1115,7 @@ private:
 			// Main loop
 
 		cbranch_taken_loop:
-			pc += *cast(const(byte)*) pc;
+			pc += cast(byte)ram[pc];
 		inc_pc_loop:
 			pc++;
 		loop: {
@@ -1126,12 +1126,12 @@ private:
 				assert(cast(uint) x < 0x100);
 				assert(cast(uint) y < 0x100);
 
-				opcode = *pc;
+				opcode = ram[pc];
 				if ((rel_time += m.cycle_table[opcode]) > 0)
 					goto out_of_time;
 
 				static if (is(SPC_CPU_OPCODE_HOOK)) {
-					SPC_CPU_OPCODE_HOOK(pc - ram, opcode);
+					SPC_CPU_OPCODE_HOOK(pc, opcode);
 				}
 				/*
 		//SUB_CASE_COUNTER( 1 );
@@ -1149,7 +1149,8 @@ private:
 		*/
 
 				// TODO: if PC is at end of memory, this will get wrong operand (very obscure)
-				data = *++pc;
+				++pc;
+				data = ram[pc];
 				uint addr;
 				int addr2;
 				int temp;
@@ -1182,15 +1183,15 @@ private:
 					// BRANCH( (ubyte) nz )
 
 				case 0x3F: { // CALL
-						int old_addr = cast(int)(pc - ram + 2);
-						(pc = ram + ((*cast(ushort*)(pc))));
+						int old_addr = cast(int)(pc + 2);
+						pc = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 						{ // PUSH16( old_addr );
-							addr2 = cast(int)((sp -= 2) - ram);
+							addr2 = cast(int)((sp -= 2));
 							if (addr2 > 0x100) {
-								cast(void)(*cast(ushort*)(sp) = (cast(ushort) old_addr));
+								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) old_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) old_addr;
-								sp[1] = cast(ubyte)(old_addr >> 8);
+								ram[sp + 1] = cast(ubyte)(old_addr >> 8);
 								sp += 0x100;
 							}
 						}
@@ -1199,16 +1200,16 @@ private:
 
 				case 0x6F: // RET
 					version (SPC_NO_SP_WRAPAROUND) {
-						(pc = ram + ((*cast(ushort*)(sp))));
+						pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
 						sp += 2;
 					} else {
-						addr2 = cast(int)(sp - ram);
-						(pc = ram + ((*cast(ushort*)(sp))));
+						addr2 = cast(int)(sp);
+						pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
 						sp += 2;
 						if (addr2 < 0x1FF)
 							goto loop;
 
-						(pc = ram + (sp[-0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
+						(pc = (ram[sp -0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
 						sp -= 0x100;
 					}
 					goto loop;
@@ -1229,7 +1230,7 @@ private:
 					}
 					goto case;
 				case 0x8F: { // MOV dp,#imm
-						temp = *(pc + 1);
+						temp = ram[pc + 1];
 						pc += 2;
 
 						version (SPC_MORE_ACCURACY) {
@@ -1279,10 +1280,11 @@ private:
 					pc--;
 					goto end_0xE8;
 				case 0xE8 + 0x0F: /* (dp)+Y */
-					data = (*cast(ushort*)((ram + ((data + dp))))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0xE8;
 				case 0xE8 - 0x01: /* (dp+X) */
-					data = (*cast(ushort*)((ram + (cast(ubyte)(data + x)) + dp)));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0xE8;
 				case 0xE8 + 0x0E: /* abs+Y */
 					data += y;
@@ -1292,7 +1294,8 @@ private:
 					goto case;
 				case 0xE8 - 0x03: /* abs */
 				abs_0xE8:
-					data += 0x100 * *(++pc);
+					++pc;
+					data += 0x100 * ram[pc];
 					goto end_0xE8;
 				case 0xE8 + 0x0C: /* dp+X */
 					data = cast(ubyte)(data + x);
@@ -1323,7 +1326,7 @@ private:
 					goto inc_pc_loop;
 
 				case 0xE9: // MOV X,abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					++pc;
 					data = cpu_read(data, rel_time);
 					goto case;
@@ -1344,7 +1347,7 @@ private:
 					goto loop;
 
 				case 0xEC: { // MOV Y,abs
-						temp = (*cast(ushort*)(pc));
+						temp = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 						pc += 2;
 						{
 							y = nz = cpu_read(temp, rel_time);
@@ -1364,10 +1367,11 @@ private:
 					pc--;
 					goto end_0xC8;
 				case 0xC8 + 0x0F: /* (dp)+Y */
-					data = (*cast(ushort*)(ram + ((data + dp)))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0xC8;
 				case 0xC8 - 0x01: /* (dp+X) */
-					data = (*cast(ushort*)(ram + (cast(ubyte)(data + x)) + dp));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0xC8;
 				case 0xC8 + 0x0E: /* abs+Y */
 					data += y;
@@ -1377,7 +1381,8 @@ private:
 					goto case;
 				case 0xC8 - 0x03: /* abs */
 				abs_0xC8:
-					data += 0x100 * *(++pc);
+					++pc;
+					data += 0x100 * ram[pc];
 					goto end_0xC8;
 				case 0xC8 + 0x0C: /* dp+X */
 					data = cast(ubyte)(data + x);
@@ -1394,7 +1399,7 @@ private:
 				case 0xC9: // MOV abs,X
 						temp = x;
 				mov_abs_temp:
-						cpu_write(temp, (*cast(ushort*)(pc)), rel_time);
+						cpu_write(temp, (cast(ushort[])(ram[pc .. pc + 2]))[0], rel_time);
 						pc += 2;
 						goto loop;
 					}
@@ -1436,11 +1441,11 @@ private:
 					goto loop;
 
 				case 0x9D: // MOV X,SP
-					x = nz = cast(int)(sp - 0x101 - ram);
+					x = nz = cast(int)(sp - 0x101);
 					goto loop;
 
 				case 0xBD: // MOV SP,X
-					(sp = ram + 0x101 + (x));
+					sp = cast(ushort)(0x101 + x);
 					goto loop;
 
 					//case 0xC6: // MOV (X),A (handled by MOV addr,A in group 2)
@@ -1457,10 +1462,11 @@ private:
 					pc--;
 					goto end_0x28;
 				case 0x28 + 0x0F: /* (dp)+Y */
-					data = (*cast(ushort*)(ram + ((data + dp)))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0x28;
 				case 0x28 - 0x01: /* (dp+X) */
-					data = (*cast(ushort*)(ram + (cast(ubyte)(data + x)) + dp));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x28;
 				case 0x28 + 0x0E: /* abs+Y */
 					data += y;
@@ -1470,7 +1476,8 @@ private:
 					goto case;
 				case 0x28 - 0x03: /* abs */
 				abs_0x28:
-					data += 0x100 * *(++pc);
+					++pc;
+					data += 0x100 * ram[pc];
 					goto end_0x28;
 				case 0x28 + 0x0C: /* dp+X */
 					data = cast(ubyte)(data + x);
@@ -1492,9 +1499,9 @@ private:
 						data = cpu_read(dp + data, rel_time - 3);
 						goto case;
 				case 0x28 + 0x10: { /*dp,imm*/
-							const(ubyte)* addr3 = pc + 1;
+							const(ubyte) addr3 = ram[pc + 1];
 							pc += 2;
-							addr = *(addr3) + dp;
+							addr = addr3 + dp;
 						}
 				addr_0x28:
 						nz = data & cpu_read(addr, rel_time - 1);
@@ -1509,10 +1516,11 @@ private:
 					pc--;
 					goto end_0x08;
 				case 0x08 + 0x0F: /* (dp)+Y */
-					data = (*cast(ushort*)(ram + ((data + dp)))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0x08;
 				case 0x08 - 0x01: /* (dp+X) */
-					data = (*cast(ushort*)(ram + (cast(ubyte)(data + x)) + dp));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x08;
 				case 0x08 + 0x0E: /* abs+Y */
 					data += y;
@@ -1522,7 +1530,8 @@ private:
 					goto case;
 				case 0x08 - 0x03: /* abs */
 				abs_0x08:
-					data += 0x100 * *(++pc);
+					++pc;
+					data += 0x100 * ram[pc];
 					goto end_0x08;
 				case 0x08 + 0x0C: /* dp+X */
 					data = cast(ubyte)(data + x);
@@ -1544,9 +1553,9 @@ private:
 						data = cpu_read(dp + data, rel_time - 3);
 						goto case;
 				case 0x08 + 0x10: { /*dp,imm*/
-							const(ubyte)* addr3 = pc + 1;
+							const(ubyte) addr3 = ram[pc + 1];
 							pc += 2;
-							addr = *(addr3) + dp;
+							addr = addr3 + dp;
 						}
 				addr_0x08:
 						nz = data | cpu_read(addr, rel_time - 1);
@@ -1560,10 +1569,11 @@ private:
 					pc--;
 					goto end_0x48;
 				case 0x48 + 0x0F: /* (dp)+Y */
-					data = (*cast(ushort*)(ram + ((data + dp)))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0x48;
 				case 0x48 - 0x01: /* (dp+X) */
-					data = (*cast(ushort*)(ram + (cast(ubyte)(data + x)) + dp));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x48;
 				case 0x48 + 0x0E: /* abs+Y */
 					data += y;
@@ -1573,7 +1583,8 @@ private:
 					goto case;
 				case 0x48 - 0x03: /* abs */
 				abs_0x48:
-					data += 0x100 * *(++pc);
+					++pc;
+					data += 0x100 * ram[pc];
 					goto end_0x48;
 				case 0x48 + 0x0C: /* dp+X */
 					data = cast(ubyte)(data + x);
@@ -1595,9 +1606,9 @@ private:
 						data = cpu_read(dp + data, rel_time - 3);
 						goto case;
 				case 0x48 + 0x10: { /*dp,imm*/
-							const(ubyte)* addr3 = pc + 1;
+							const(ubyte) addr3 = ram[pc + 1];
 							pc += 2;
-							addr = *(addr3) + dp;
+							addr = addr3 + dp;
 						}
 				addr_0x48:
 						nz = data ^ cpu_read(addr, rel_time - 1);
@@ -1613,10 +1624,11 @@ private:
 					pc--;
 					goto end_0x68;
 				case 0x68 + 0x0F: /* (dp)+Y */
-					data = (*cast(ushort*)(ram + ((data + dp)))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0x68;
 				case 0x68 - 0x01: /* (dp+X) */
-					data = (*cast(ushort*)(ram + (cast(ubyte)(data + x)) + dp));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x68;
 				case 0x68 + 0x0E: /* abs+Y */
 					data += y;
@@ -1626,7 +1638,8 @@ private:
 					goto case;
 				case 0x68 - 0x03: /* abs */
 				abs_0x68:
-					data += 0x100 * *(++pc);
+					++pc;
+					data += 0x100 * ram[pc];
 					goto end_0x68;
 				case 0x68 + 0x0C: /* dp+X */
 					data = cast(ubyte)(data + x);
@@ -1653,7 +1666,8 @@ private:
 					data = cpu_read(dp + data, rel_time - 3);
 					goto case;
 				case 0x78: // CMP dp,imm
-					nz = cpu_read(dp + (*(++pc)), rel_time - 1) - data;
+					++pc;
+					nz = cpu_read(dp + ram[pc], rel_time - 1) - data;
 					c = ~nz;
 					nz &= 0xFF;
 					goto inc_pc_loop;
@@ -1662,7 +1676,7 @@ private:
 					data += dp;
 					goto cmp_x_addr;
 				case 0x1E: // CMP X,abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc++;
 				cmp_x_addr:
 					data = cpu_read(data, rel_time);
@@ -1677,7 +1691,7 @@ private:
 					data += dp;
 					goto cmp_y_addr;
 				case 0x5E: // CMP Y,abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc++;
 				cmp_y_addr:
 					data = cpu_read(data, rel_time);
@@ -1701,7 +1715,8 @@ private:
 						goto case;
 				case 0xB8: // SBC dp,imm
 				case 0x98: // ADC dp,imm
-						addr2 = *(++pc) + dp;
+						++pc;
+						addr2 = ram[pc] + dp;
 				adc_addr:
 						nz = cpu_read(addr2, rel_time - 1);
 						goto adc_data;
@@ -1714,11 +1729,12 @@ private:
 						goto end_0x88;
 				case 0x88 + 0x0F:
 				case (0x88 + 0x0F) + 0x20: /* (dp)+Y */
-						data = (*cast(ushort*)(ram + ((data + dp)))) + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 						goto end_0x88;
 				case 0x88 - 0x01:
 				case (0x88 - 0x01) + 0x20: /* (dp+X) */
-						data = (*cast(ushort*)(ram + (cast(ubyte)(data + x)) + dp));
+					const offset = cast(ubyte)(data + x) + dp;
+					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 						goto end_0x88;
 				case 0x88 + 0x0E:
 				case (0x88 + 0x0E) + 0x20: /* abs+Y */
@@ -1731,7 +1747,8 @@ private:
 				case 0x88 - 0x03:
 				case (0x88 - 0x03) + 0x20: /* abs */
 				abs_0x88:
-						data += 0x100 * *(++pc);
+						++pc;
+						data += 0x100 * ram[pc];
 						goto end_0x88;
 				case 0x88 + 0x0C:
 				case (0x88 + 0x0C) + 0x20: /* dp+X */
@@ -1812,7 +1829,7 @@ private:
 					goto inc_abs;
 				case 0x8C: // DEC abs
 				case 0xAC: // INC abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc++;
 				inc_abs:
 					nz = (opcode >> 4 & 2) - 1;
@@ -1860,7 +1877,7 @@ private:
 					c = 0;
 					goto case;
 				case 0x2C: // ROL abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc++;
 				rol_mem:
 					nz = c >> 8 & 1;
@@ -1885,7 +1902,7 @@ private:
 					c = 0;
 					goto case;
 				case 0x6C: // ROR abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc++;
 				ror_mem: {
 						temp = cpu_read(data, rel_time - 1);
@@ -2194,26 +2211,27 @@ private:
 					// BRANCH( y )
 
 				case 0x1F: // JMP [abs+X]
-					(pc = ram + ((*cast(ushort*)(pc)) + x));
+					pc = cast(ushort)((cast(const(ushort)[])(ram[pc .. pc + 2]))[0] + x);
 					goto case;
 				case 0x5F: // JMP abs
-					(pc = ram + ((*cast(ushort*)(pc))));
+					pc = ((cast(const(ushort)[])(ram[pc .. pc + 2]))[0]);
 					goto loop;
 
 					// 13. SUB-ROUTINE CALL RETURN COMMANDS
 
 				case 0x0F: { // BRK
 						// int temp;
-						int ret_addr = cast(int)(pc - ram);
+						int ret_addr = cast(int)(pc);
 						dprintf("SPC: suspicious opcode: BRK\n");
-						(pc = ram + ((*cast(ushort*)(ram + 0xFFDE)))); // vector address verified
+						pc = (cast(ushort[])(ram[0xFFDE .. 0xFFE0]))[0]; // vector address verified
 						{ // PUSH16( ret_addr );
-							addr2 = cast(int)((sp -= 2) - ram);
+							sp -= 2;
+							addr2 = cast(int)(sp);
 							if (addr2 > 0x100) {
-								cast(void)(*cast(ushort*)(sp) = (cast(ushort) ret_addr));
+								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) ret_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) ret_addr;
-								sp[1] = cast(ubyte)(ret_addr >> 8);
+								ram[sp + 1] = cast(ubyte)(ret_addr >> 8);
 								sp += 0x100;
 							}
 						}
@@ -2228,23 +2246,24 @@ private:
 						}
 						psw = (psw | b10) & ~i04;
 						{ // PUSH( temp );
-							*--sp = cast(ubyte)(temp);
-							if (sp - ram == 0x100)
+							--sp;
+							ram[sp] = cast(ubyte)(temp);
+							if (sp == 0x100)
 								sp += 0x100;
 						}
 						goto loop;
 					}
 
 				case 0x4F: { // PCALL offset
-						int ret_addr = cast(int)(pc - ram + 1);
-						(pc = ram + (0xFF00 | data));
+						int ret_addr = cast(int)(pc + 1);
+						(pc = cast(ushort)(0xFF00 | data));
 						{ //PUSH16(ret_addr)
-							addr2 = cast(int)((sp -= 2) - ram);
+							addr2 = cast(int)((sp -= 2));
 							if (addr2 > 0x100) {
-								cast(void)(*cast(ushort*)(sp) = (cast(ushort) ret_addr));
+								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) ret_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) ret_addr;
-								sp[1] = cast(ubyte)(ret_addr >> 8);
+								ram[sp + 1] = cast(ubyte)(ret_addr >> 8);
 								sp += 0x100;
 							}
 						}
@@ -2267,15 +2286,15 @@ private:
 				case 0xD1:
 				case 0xE1:
 				case 0xF1: {
-						int ret_addr = cast(int)(pc - ram);
-						(pc = ram + ((*cast(ushort*)(ram + ((0xFFDE - (opcode >> 3)))))));
+						int ret_addr = cast(int)(pc);
+						pc = (cast(ushort[])(ram[0xFFDE - (opcode >> 3) .. 0xFFE0 - (opcode >> 3)]))[0];
 						{ //PUSH16( ret_addr );
-							addr2 = cast(int)((sp -= 2) - ram);
+							addr2 = cast(int)((sp -= 2));
 							if (addr2 > 0x100) {
-								cast(void)(*cast(ushort*)(sp) = (cast(ushort) ret_addr));
+								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) ret_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) ret_addr;
-								sp[1] = cast(ubyte)(ret_addr >> 8);
+								ram[sp + 1] = cast(ubyte)(ret_addr >> 8);
 								sp += 0x100;
 							}
 						}
@@ -2287,15 +2306,16 @@ private:
 					{
 						// int temp;
 				case 0x7F: // RET1
-						temp = *sp;
-						(pc = ram + ((*cast(ushort*)(sp + 1))));
+						temp = ram[sp];
+						pc = (cast(ushort[])(ram[sp + 1 .. sp + 3]))[0];
 						sp += 3;
 						goto set_psw;
 				case 0x8E: // POP PSW
 				{ // POP( temp );
-							temp = *sp++;
-							if (sp - ram == 0x201) {
-								temp = sp[-0x101];
+							temp = ram[sp];
+							sp++;
+							if (sp == 0x201) {
+								temp = ram[sp -0x101];
 								sp -= 0x100;
 							}
 						}
@@ -2319,8 +2339,9 @@ private:
 								temp |= z02;
 						}
 						{ // PUSH( temp );
-							*--sp = cast(ubyte)(temp);
-							if (sp - ram == 0x100)
+							--sp;
+							ram[sp] = cast(ubyte)(temp);
+							if (sp == 0x100)
 								sp += 0x100;
 						}
 						goto loop;
@@ -2328,33 +2349,37 @@ private:
 
 				case 0x2D: // PUSH A
 				{ // PUSH( a );
-						*--sp = cast(ubyte)(a);
-						if (sp - ram == 0x100)
+						--sp;
+						ram[sp] = cast(ubyte)(a);
+						if (sp == 0x100)
 							sp += 0x100;
 					}
 					goto loop;
 
 				case 0x4D: // PUSH X
 				{ // PUSH( x );
-						*--sp = cast(ubyte)(x);
-						if (sp - ram == 0x100)
+						--sp;
+						ram[sp] = cast(ubyte)(x);
+						if (sp == 0x100)
 							sp += 0x100;
 					}
 					goto loop;
 
 				case 0x6D: // PUSH Y
 				{ // PUSH( y );
-						*--sp = cast(ubyte)(y);
-						if (sp - ram == 0x100)
+						--sp;
+						ram[sp] = cast(ubyte)(y);
+						if (sp == 0x100)
 							sp += 0x100;
 					}
 					goto loop;
 
 				case 0xAE: // POP A
 				{ // POP( a );
-						a = *sp++;
-						if (sp - ram == 0x201) {
-							a = sp[-0x101];
+						a = ram[sp];
+						sp++;
+						if (sp == 0x201) {
+							a = ram[sp -0x101];
 							sp -= 0x100;
 						}
 					}
@@ -2362,9 +2387,10 @@ private:
 
 				case 0xCE: // POP X
 				{ // POP( x );
-						x = *sp++;
-						if (sp - ram == 0x201) {
-							x = sp[-0x101];
+						x = ram[sp];
+						sp++;
+						if (sp == 0x201) {
+							x = ram[sp -0x101];
 							sp -= 0x100;
 						}
 					}
@@ -2372,9 +2398,10 @@ private:
 
 				case 0xEE: // POP Y
 				{ // POP( y );
-						y = *sp++;
-						if (sp - ram == 0x201) {
-							y = sp[-0x101];
+						y = ram[sp];
+						sp++;
+						if (sp == 0x201) {
+							y = ram[sp -0x101];
 							sp -= 0x100;
 						}
 					}
@@ -2409,7 +2436,7 @@ private:
 
 				case 0x0E: // TSET1 abs
 				case 0x4E: // TCLR1 abs
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc += 2;
 					{
 						uint temp2 = cpu_read(data, rel_time - 2);
@@ -2422,32 +2449,32 @@ private:
 					goto loop;
 
 				case 0x4A: // AND1 C,mem.bit
-					c &= CPU_mem_bit(pc[0 .. 2], rel_time + 0);
+					c &= CPU_mem_bit(ram[pc .. pc + 2], rel_time + 0);
 					pc += 2;
 					goto loop;
 
 				case 0x6A: // AND1 C,/mem.bit
-					c &= ~CPU_mem_bit(pc[0 .. 2], rel_time + 0);
+					c &= ~CPU_mem_bit(ram[pc .. pc + 2], rel_time + 0);
 					pc += 2;
 					goto loop;
 
 				case 0x0A: // OR1 C,mem.bit
-					c |= CPU_mem_bit(pc[0 .. 2], rel_time - 1);
+					c |= CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
 					pc += 2;
 					goto loop;
 
 				case 0x2A: // OR1 C,/mem.bit
-					c |= ~CPU_mem_bit(pc[0 .. 2], rel_time - 1);
+					c |= ~CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
 					pc += 2;
 					goto loop;
 
 				case 0x8A: // EOR1 C,mem.bit
-					c ^= CPU_mem_bit(pc[0 .. 2], rel_time - 1);
+					c ^= CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
 					pc += 2;
 					goto loop;
 
 				case 0xEA: // NOT1 mem.bit
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc += 2;
 					{
 						uint temp2 = cpu_read(data & 0x1FFF, rel_time - 1);
@@ -2457,7 +2484,7 @@ private:
 					goto loop;
 
 				case 0xCA: // MOV1 mem.bit,C
-					data = (*cast(ushort*)(pc));
+					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
 					pc += 2;
 					{
 						uint temp2 = cpu_read(data & 0x1FFF, rel_time - 2);
@@ -2468,7 +2495,7 @@ private:
 					goto loop;
 
 				case 0xAA: // MOV1 C,mem.bit
-					c = CPU_mem_bit(pc[0 .. 2], rel_time);
+					c = CPU_mem_bit(ram[pc .. pc + 2], rel_time);
 					pc += 2;
 					goto loop;
 
@@ -2515,10 +2542,10 @@ private:
 
 				case 0xFF: { // STOP
 						// handle PC wrap-around
-						addr = cast(uint)(pc - ram - 1);
+						addr = cast(uint)(pc - 1);
 						if (addr >= 0x10000) {
 							addr &= 0xFFFF;
-							(pc = ram + (addr));
+							pc = cast(ushort)addr;
 							dprintf("SPC: PC wrapped around\n");
 							goto loop;
 						}
@@ -2537,14 +2564,14 @@ private:
 				assert(0); // catch any unhandled instructions
 			}
 		out_of_time:
-			rel_time -= m.cycle_table[*pc]; // undo partial execution of opcode
+			rel_time -= m.cycle_table[ram[pc]]; // undo partial execution of opcode
 		stop:
 
 			// Uncache registers
-			if (pc - ram >= 0x10000)
+			if (pc >= 0x10000)
 				dprintf("SPC: PC wrapped around\n");
-			m.cpu_regs.pc = cast(ushort)(pc - ram);
-			m.cpu_regs.sp = cast(ubyte)(sp - 0x101 - ram);
+			m.cpu_regs.pc = cast(ushort)(pc);
+			m.cpu_regs.sp = cast(ubyte)(sp - 0x101);
 			m.cpu_regs.a = cast(ubyte) a;
 			m.cpu_regs.x = cast(ubyte) x;
 			m.cpu_regs.y = cast(ubyte) y;
@@ -2567,7 +2594,7 @@ private:
 		m.timers[1].next_time -= rel_time;
 		m.timers[2].next_time -= rel_time;
 		assert(m.spc_time <= end_time);
-		return &m.smp_regs[0][r_cpuio0];
+		return m.smp_regs[0][r_cpuio0 .. $];
 	}
 
 	struct spc_file_t {
