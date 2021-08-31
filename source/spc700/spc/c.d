@@ -24,10 +24,7 @@ SNES_SPC* spc_new() {
 	assert(spc_voice_count == cast(int) SNES_SPC.voice_count);
 	assert(spc_tempo_unit == cast(int) SNES_SPC.tempo_unit);
 	assert(spc_file_size == cast(int) SNES_SPC.spc_file_size);
-	version (SPC_NO_COPY_STATE_FUNCS) {
-	} else {
-		assert(spc_state_size == cast(int) SNES_SPC.state_size);
-	}
+	assert(spc_state_size == cast(int) SNES_SPC.state_size);
 
 	SNES_SPC* s = manualAlloc!SNES_SPC();
 	if (s && s.initialize()) {
@@ -142,28 +139,26 @@ const(char*) spc_skip(SNES_SPC* s, int count) {
 
 /**** State save/load (only available with accurate DSP) ****/
 
-version(SPC_NO_COPY_STATE_FUNCS) {} else {
-	/* Saves/loads exact emulator state */
-	enum spc_state_size = 67 * 1024L; /* maximum space needed when saving */
-	alias spc_copy_func_t = void function(ubyte** io, void* state, size_t) @safe nothrow;
-	void spc_copy_state(SNES_SPC* s, ubyte** p, spc_copy_func_t f) {
-		void delegate(ubyte**, void[]) @safe nothrow dg = (ubyte** io, void[] state) { f(io, &state[0], state.length); };
-		s.copy_state(p, dg);
-	}
-	/* Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
-	Does not set up SPC header; use spc_init_header() for that. */
-	void spc_save_spc(SNES_SPC* s, void* spc_out) {
-		s.save_spc((cast(ubyte*)spc_out)[0 .. spc_file_size]);
-	}
-	/* Returns non-zero if new key-on events occurred since last check. Useful for
-	trimming silence while saving an SPC. */
-	int spc_check_kon(SNES_SPC* s) {
-		return s.check_kon();
-	}
-	/* Writes minimal SPC file header to spc_out */
-	void spc_init_header(void* spc_out) {
-		SNES_SPC.init_header((cast(ubyte*)spc_out)[0 .. spc_file_size]);
-	}
+/* Saves/loads exact emulator state */
+enum spc_state_size = 67 * 1024L; /* maximum space needed when saving */
+alias spc_copy_func_t = void function(ubyte** io, void* state, size_t) @safe nothrow;
+void spc_copy_state(SNES_SPC* s, ubyte** p, spc_copy_func_t f) {
+	void delegate(ubyte**, void[]) @safe nothrow dg = (ubyte** io, void[] state) { f(io, &state[0], state.length); };
+	s.copy_state(p, dg);
+}
+/* Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
+Does not set up SPC header; use spc_init_header() for that. */
+void spc_save_spc(SNES_SPC* s, void* spc_out) {
+	s.save_spc((cast(ubyte*)spc_out)[0 .. spc_file_size]);
+}
+/* Returns non-zero if new key-on events occurred since last check. Useful for
+trimming silence while saving an SPC. */
+int spc_check_kon(SNES_SPC* s) {
+	return s.check_kon();
+}
+/* Writes minimal SPC file header to spc_out */
+void spc_init_header(void* spc_out) {
+	SNES_SPC.init_header((cast(ubyte*)spc_out)[0 .. spc_file_size]);
 }
 
 

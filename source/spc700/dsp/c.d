@@ -23,10 +23,7 @@ SPC_DSP* spc_dsp_new() {
 	// be sure constants match
 	assert(spc_dsp_voice_count == cast(int) SPC_DSP.voice_count);
 	assert(spc_dsp_register_count == cast(int) SPC_DSP.register_count);
-	version (SPC_NO_COPY_STATE_FUNCS) {
-	} else {
-		assert(spc_dsp_state_size == cast(int) SPC_DSP.state_size);
-	}
+	assert(spc_dsp_state_size == cast(int) SPC_DSP.state_size);
 	return manualAlloc!SPC_DSP();
 }
 
@@ -104,18 +101,15 @@ void spc_dsp_load(SPC_DSP* s, ref const(ubyte)[spc_dsp_register_count] regs) {
 	s.load(regs);
 }
 
-version (SPC_NO_COPY_STATE_FUNCS) {
-} else {
-	/* Saves/loads exact emulator state (accurate DSP only) */
-	enum spc_dsp_state_size = 640; /* maximum space needed when saving */
-	alias spc_dsp_copy_func_t = void function(ubyte** io, void* state, size_t) @trusted nothrow;
-	void spc_dsp_copy_state(SPC_DSP* s, ubyte** p, spc_dsp_copy_func_t f) {
-		void delegate(ubyte**, void[]) @safe nothrow dg = (ubyte** io, void[] state) { f(io, &state[0], state.length); };
-		s.copy_state(p, dg);
-	}
+/* Saves/loads exact emulator state (accurate DSP only) */
+enum spc_dsp_state_size = 640; /* maximum space needed when saving */
+alias spc_dsp_copy_func_t = void function(ubyte** io, void* state, size_t) @trusted nothrow;
+void spc_dsp_copy_state(SPC_DSP* s, ubyte** p, spc_dsp_copy_func_t f) {
+	void delegate(ubyte**, void[]) @safe nothrow dg = (ubyte** io, void[] state) { f(io, &state[0], state.length); };
+	s.copy_state(p, dg);
+}
 
-	/* Returns non-zero if new key-on events occurred since last call (accurate DSP only) */
-	int spc_dsp_check_kon(SPC_DSP* s) {
-		return s.check_kon();
-	}
+/* Returns non-zero if new key-on events occurred since last call (accurate DSP only) */
+int spc_dsp_check_kon(SPC_DSP* s) {
+	return s.check_kon();
 }

@@ -99,25 +99,22 @@ public:
 		set_output(null);
 		reset();
 
-		version (NDEBUG) {
-		} else {
-			// be sure this sign-extends
-			assert(cast(short) 0x8000 == -0x8000);
+		// be sure this sign-extends
+		assert(cast(short) 0x8000 == -0x8000);
 
-			// be sure right shift preserves sign
-			assert((-1 >> 1) == -1);
+		// be sure right shift preserves sign
+		assert((-1 >> 1) == -1);
 
-			// check clamp macro
-			int i;
-			i = +0x8000;
-			if (cast(short) i != i)
-				i = (i >> 31) ^ 0x7FFF;
-			assert(i == +0x7FFF);
-			i = -0x8001;
-			if (cast(short) i != i)
-				i = (i >> 31) ^ 0x7FFF;
-			assert(i == -0x8000);
-		}
+		// check clamp macro
+		int i;
+		i = +0x8000;
+		if (cast(short) i != i)
+			i = (i >> 31) ^ 0x7FFF;
+		assert(i == +0x7FFF);
+		i = -0x8001;
+		if (cast(short) i != i)
+			i = (i >> 31) ^ 0x7FFF;
+		assert(i == -0x8000);
 	}
 
 	// Sets destination for output samples. If out is NULL or out_size is 0,
@@ -418,106 +415,104 @@ public:
 
 	// Saves/loads exact emulator state
 	enum state_size = 640; // maximum space needed when saving
-	version(SPC_NO_COPY_STATE_FUNCS) {} else {
-		alias copy_func_t = void delegate(ubyte** io, void[] state) @safe nothrow;
-		void copy_state(ubyte** io, copy_func_t copy) @safe {
-			SPC_State_Copier copier = SPC_State_Copier(io, copy);
+	alias copy_func_t = void delegate(ubyte** io, void[] state) @safe nothrow;
+	void copy_state(ubyte** io, copy_func_t copy) @safe {
+		SPC_State_Copier copier = SPC_State_Copier(io, copy);
 
-			auto SPC_COPY(T, U)(ref U state) {
-				state = cast(T) copier.copy_int(state, T.sizeof);
-				assert(cast(T) state == state);
-			}
-			// DSP registers
-			copier.copy(m.regs[0 .. register_count]);
+		auto SPC_COPY(T, U)(ref U state) {
+			state = cast(T) copier.copy_int(state, T.sizeof);
+			assert(cast(T) state == state);
+		}
+		// DSP registers
+		copier.copy(m.regs[0 .. register_count]);
 
-			// Internal state
+		// Internal state
 
-			// Voices
-			int i;
-			for (i = 0; i < voice_count; i++) {
-				voice_t* v = &m.voices[i];
+		// Voices
+		int i;
+		for (i = 0; i < voice_count; i++) {
+			voice_t* v = &m.voices[i];
 
-				// BRR buffer
-				int i2;
-				for (i2 = 0; i2 < brr_buf_size; i2++) {
-					int s = v.buf[i2];
-					SPC_COPY!short(s);
-					v.buf[i2] = v.buf[i2 + brr_buf_size] = s;
-				}
-
-				SPC_COPY!ushort(v.interp_pos);
-				SPC_COPY!ushort(v.brr_addr);
-				SPC_COPY!ushort(v.env);
-				SPC_COPY!short(v.hidden_env);
-				SPC_COPY!ubyte(v.buf_pos);
-				SPC_COPY!ubyte(v.brr_offset);
-				SPC_COPY!ubyte(v.kon_delay);
-				{
-					int m = v.env_mode;
-					SPC_COPY!ubyte(m);
-					v.env_mode = cast(env_mode_t) m;
-				}
-				SPC_COPY!ubyte(v.t_envx_out);
-
-				copier.extra();
+			// BRR buffer
+			int i2;
+			for (i2 = 0; i2 < brr_buf_size; i2++) {
+				int s = v.buf[i2];
+				SPC_COPY!short(s);
+				v.buf[i2] = v.buf[i2 + brr_buf_size] = s;
 			}
 
-			// Echo history
-			for (i = 0; i < echo_hist_size; i++) {
-				int j;
-				for (j = 0; j < 2; j++) {
-					int s = m.echo_hist[i + m.echo_hist_pos][j];
-					SPC_COPY!short(s);
-					m.echo_hist[i][j] = s; // write back at offset 0
-				}
+			SPC_COPY!ushort(v.interp_pos);
+			SPC_COPY!ushort(v.brr_addr);
+			SPC_COPY!ushort(v.env);
+			SPC_COPY!short(v.hidden_env);
+			SPC_COPY!ubyte(v.buf_pos);
+			SPC_COPY!ubyte(v.brr_offset);
+			SPC_COPY!ubyte(v.kon_delay);
+			{
+				int m = v.env_mode;
+				SPC_COPY!ubyte(m);
+				v.env_mode = cast(env_mode_t) m;
 			}
-			m.echo_hist_pos = 0;
-			m.echo_hist[echo_hist_size .. echo_hist_size * 2] = m.echo_hist[0 .. echo_hist_size];
-
-			// Misc
-			SPC_COPY!ubyte(m.every_other_sample);
-			SPC_COPY!ubyte(m.kon);
-
-			SPC_COPY!ushort(m.noise);
-			SPC_COPY!ushort(m.counter);
-			SPC_COPY!ushort(m.echo_offset);
-			SPC_COPY!ushort(m.echo_length);
-			SPC_COPY!ubyte(m.phase);
-
-			SPC_COPY!ubyte(m.new_kon);
-			SPC_COPY!ubyte(m.endx_buf);
-			SPC_COPY!ubyte(m.envx_buf);
-			SPC_COPY!ubyte(m.outx_buf);
-
-			SPC_COPY!ubyte(m.t_pmon);
-			SPC_COPY!ubyte(m.t_non);
-			SPC_COPY!ubyte(m.t_eon);
-			SPC_COPY!ubyte(m.t_dir);
-			SPC_COPY!ubyte(m.t_koff);
-
-			SPC_COPY!ushort(m.t_brr_next_addr);
-			SPC_COPY!ubyte(m.t_adsr0);
-			SPC_COPY!ubyte(m.t_brr_header);
-			SPC_COPY!ubyte(m.t_brr_byte);
-			SPC_COPY!ubyte(m.t_srcn);
-			SPC_COPY!ubyte(m.t_esa);
-			SPC_COPY!ubyte(m.t_echo_enabled);
-
-			SPC_COPY!short(m.t_main_out[0]);
-			SPC_COPY!short(m.t_main_out[1]);
-			SPC_COPY!short(m.t_echo_out[0]);
-			SPC_COPY!short(m.t_echo_out[1]);
-			SPC_COPY!short(m.t_echo_in[0]);
-			SPC_COPY!short(m.t_echo_in[1]);
-
-			SPC_COPY!ushort(m.t_dir_addr);
-			SPC_COPY!ushort(m.t_pitch);
-			SPC_COPY!short(m.t_output);
-			SPC_COPY!ushort(m.t_echo_ptr);
-			SPC_COPY!ubyte(m.t_looped);
+			SPC_COPY!ubyte(v.t_envx_out);
 
 			copier.extra();
 		}
+
+		// Echo history
+		for (i = 0; i < echo_hist_size; i++) {
+			int j;
+			for (j = 0; j < 2; j++) {
+				int s = m.echo_hist[i + m.echo_hist_pos][j];
+				SPC_COPY!short(s);
+				m.echo_hist[i][j] = s; // write back at offset 0
+			}
+		}
+		m.echo_hist_pos = 0;
+		m.echo_hist[echo_hist_size .. echo_hist_size * 2] = m.echo_hist[0 .. echo_hist_size];
+
+		// Misc
+		SPC_COPY!ubyte(m.every_other_sample);
+		SPC_COPY!ubyte(m.kon);
+
+		SPC_COPY!ushort(m.noise);
+		SPC_COPY!ushort(m.counter);
+		SPC_COPY!ushort(m.echo_offset);
+		SPC_COPY!ushort(m.echo_length);
+		SPC_COPY!ubyte(m.phase);
+
+		SPC_COPY!ubyte(m.new_kon);
+		SPC_COPY!ubyte(m.endx_buf);
+		SPC_COPY!ubyte(m.envx_buf);
+		SPC_COPY!ubyte(m.outx_buf);
+
+		SPC_COPY!ubyte(m.t_pmon);
+		SPC_COPY!ubyte(m.t_non);
+		SPC_COPY!ubyte(m.t_eon);
+		SPC_COPY!ubyte(m.t_dir);
+		SPC_COPY!ubyte(m.t_koff);
+
+		SPC_COPY!ushort(m.t_brr_next_addr);
+		SPC_COPY!ubyte(m.t_adsr0);
+		SPC_COPY!ubyte(m.t_brr_header);
+		SPC_COPY!ubyte(m.t_brr_byte);
+		SPC_COPY!ubyte(m.t_srcn);
+		SPC_COPY!ubyte(m.t_esa);
+		SPC_COPY!ubyte(m.t_echo_enabled);
+
+		SPC_COPY!short(m.t_main_out[0]);
+		SPC_COPY!short(m.t_main_out[1]);
+		SPC_COPY!short(m.t_echo_out[0]);
+		SPC_COPY!short(m.t_echo_out[1]);
+		SPC_COPY!short(m.t_echo_in[0]);
+		SPC_COPY!short(m.t_echo_in[1]);
+
+		SPC_COPY!ushort(m.t_dir_addr);
+		SPC_COPY!ushort(m.t_pitch);
+		SPC_COPY!short(m.t_output);
+		SPC_COPY!ushort(m.t_echo_ptr);
+		SPC_COPY!ubyte(m.t_looped);
+
+		copier.extra();
 	}
 	// Returns non-zero if new key-on events occurred since last call
 	bool check_kon() @safe {
@@ -1214,50 +1209,46 @@ private:
 	}
 }
 
-version (SPC_NO_COPY_STATE_FUNCS) {
-} else {
+struct SPC_State_Copier {
+nothrow:
+	SPC_DSP.copy_func_t func;
+	ubyte** buf;
+public:
+	this(ubyte** p, SPC_DSP.copy_func_t f) @safe {
+		func = f;
+		buf = p;
+	}
 
-	struct SPC_State_Copier {
-	nothrow:
-		SPC_DSP.copy_func_t func;
-		ubyte** buf;
-	public:
-		this(ubyte** p, SPC_DSP.copy_func_t f) @safe {
-			func = f;
-			buf = p;
-		}
+	final void copy(void[] state) @safe {
+		func(buf, state);
+	}
 
-		final void copy(void[] state) @safe {
-			func(buf, state);
-		}
+	final int copy_int(int state, int size) @safe {
+		ubyte[2] s;
+		assert(s.length >= size);
+		(cast(ushort[]) s)[0] = cast(ushort) state;
+		func(buf, s[0 .. size]);
+		return (cast(ushort[]) s)[0];
+	}
 
-		final int copy_int(int state, int size) @safe {
-			ubyte[2] s;
-			assert(s.length >= size);
-			(cast(ushort[]) s)[0] = cast(ushort) state;
-			func(buf, s[0 .. size]);
-			return (cast(ushort[]) s)[0];
-		}
-
-		final void skip(int count) @safe {
-			if (count > 0) {
-				char[64] temp = 0;
-				do {
-					int n = temp.sizeof;
-					if (n > count)
-						n = count;
-					count -= n;
-					func(buf, temp[0 .. n]);
-				}
-				while (count);
+	final void skip(int count) @safe {
+		if (count > 0) {
+			char[64] temp = 0;
+			do {
+				int n = temp.sizeof;
+				if (n > count)
+					n = count;
+				count -= n;
+				func(buf, temp[0 .. n]);
 			}
+			while (count);
 		}
+	}
 
-		final void extra() @safe {
-			int n = 0;
-			n = cast(ubyte) copy_int(n, ubyte.sizeof);
-			assert(cast(ubyte) n == n);
-			skip(n);
-		}
+	final void extra() @safe {
+		int n = 0;
+		n = cast(ubyte) copy_int(n, ubyte.sizeof);
+		assert(cast(ubyte) n == n);
+		skip(n);
 	}
 }

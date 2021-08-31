@@ -104,10 +104,6 @@ public:
 		m.rom[0x3E] = 0xFF;
 		m.rom[0x3F] = 0xC0;
 
-		version (SPC_LESS_ACCURATE) {
-			memcpy(reg_times.ptr, reg_times_.ptr, reg_times.sizeof);
-		}
-
 		reset();
 		return null;
 	}
@@ -220,22 +216,12 @@ public:
 
 		// Catch DSP up to CPU
 		if (m.dsp_time < 0) {
-			version (SPC_LESS_ACCURATE) {
-				int count = (0) - (max_reg_time) - m.dsp_time;
-				if (count >= 0) {
-					int clock_count = (count & ~(clocks_per_sample - 1)) + clocks_per_sample;
-					m.dsp_time += clock_count;
-					dsp.run(clock_count);
-				}
-			} else {
-				int count = (0) - m.dsp_time;
-				if (!SPC_MORE_ACCURACY || count) {
-					assert(count > 0);
-					m.dsp_time = (0);
-					dsp.run(count);
-				}
+			int count = (0) - m.dsp_time;
+			if (!SPC_MORE_ACCURACY || count) {
+				assert(count > 0);
+				m.dsp_time = (0);
+				dsp.run(count);
 			}
-			//RUN_DSP( 0, max_reg_time );
 		}
 
 		// Save any extra samples beyond what should be generated
@@ -265,21 +251,15 @@ public:
 		const int timer2_shift = 4; // 64 kHz
 		const int other_shift = 3; //  8 kHz
 
-		version (SPC_DISABLE_TEMPO) {
-			m.timers[2].prescaler = timer2_shift;
-			m.timers[1].prescaler = timer2_shift + other_shift;
-			m.timers[0].prescaler = timer2_shift + other_shift;
-		} else {
-			if (!t)
-				t = 1;
-			const int timer2_rate = 1 << timer2_shift;
-			int rate = (timer2_rate * tempo_unit + (t >> 1)) / t;
-			if (rate < timer2_rate / 4)
-				rate = timer2_rate / 4; // max 4x tempo
-			m.timers[2].prescaler = rate;
-			m.timers[1].prescaler = rate << other_shift;
-			m.timers[0].prescaler = rate << other_shift;
-		}
+		if (!t)
+			t = 1;
+		const int timer2_rate = 1 << timer2_shift;
+		int rate = (timer2_rate * tempo_unit + (t >> 1)) / t;
+		if (rate < timer2_rate / 4)
+			rate = timer2_rate / 4; // max 4x tempo
+		m.timers[2].prescaler = rate;
+		m.timers[1].prescaler = rate << other_shift;
+		m.timers[0].prescaler = rate << other_shift;
 	}
 
 	// SPC music files
@@ -360,145 +340,117 @@ public:
 
 	// Skips count samples. Several times faster than play() when using fast DSP.
 	string skip(int count) @safe {
-		version (SPC_LESS_ACCURATE) {
-			if (count > 2 * sample_rate * 2) {
-				set_output(null, 0);
-
-				// Skip a multiple of 4 samples
-				time_t end = count;
-				count = (count & 3) + 1 * sample_rate * 2;
-				end = (end - count) * (clocks_per_sample / 2);
-
-				m.skipped_kon = 0;
-				m.skipped_koff = 0;
-
-				// Preserve DSP and timer synchronization
-				// TODO: verify that this really preserves it
-				int old_dsp_time = m.dsp_time + m.spc_time;
-				m.dsp_time = end - m.spc_time + skipping_time;
-				end_frame(end);
-				m.dsp_time = m.dsp_time - skipping_time + old_dsp_time;
-
-				dsp.write(SPC_DSP.r_koff, m.skipped_koff & ~m.skipped_kon);
-				dsp.write(SPC_DSP.r_kon, m.skipped_kon);
-				clear_echo();
-			}
-		}
-
 		return play(count);
 	}
 
 	// State save/load (only available with accurate DSP)
 
-	version (SPC_NO_COPY_STATE_FUNCS) {
-	} else {
-		// Saves/loads state
-		enum state_size = 67 * 1024L; // maximum space needed when saving
-		alias copy_func_t = SPC_DSP.copy_func_t;
-		void copy_state(ubyte** io, copy_func_t copy) @safe {
-			auto copier = SPC_State_Copier(io, copy);
-			auto SPC_COPY(T, U)(ref U state) {
-				state = cast(T) copier.copy_int(state, T.sizeof);
-				assert(cast(T) state == state);
-			}
-
-			// Make state data more readable by putting 64K RAM, 16 SMP registers,
-			// then DSP (with its 128 registers) first
-
-			// RAM
-			enable_rom(0); // will get re-enabled if necessary in regs_loaded() below
-			copier.copy(m.ram.ram);
-
-			{
-				// SMP registers
-				ubyte[port_count] out_ports;
-				ubyte[reg_count] regs;
-				out_ports = m.smp_regs[0][r_cpuio0 .. r_cpuio0 + out_ports.length];
-				save_regs(regs);
-				copier.copy(regs);
-				copier.copy(out_ports);
-				load_regs(regs);
-				regs_loaded();
-				m.smp_regs[0][r_cpuio0 .. r_cpuio0 + out_ports.length] = out_ports;
-			}
-
-			// CPU registers
-			SPC_COPY!ushort(m.cpu_regs.pc);
-			SPC_COPY!ubyte(m.cpu_regs.a);
-			SPC_COPY!ubyte(m.cpu_regs.x);
-			SPC_COPY!ubyte(m.cpu_regs.y);
-			SPC_COPY!ubyte(m.cpu_regs.psw);
-			SPC_COPY!ubyte(m.cpu_regs.sp);
-			copier.extra();
-
-			SPC_COPY!short(m.spc_time);
-			SPC_COPY!short(m.dsp_time);
-
-			// DSP
-			dsp.copy_state(io, copy);
-
-			// Timers
-			for (int i = 0; i < timer_count; i++) {
-				Timer* t = &m.timers[i];
-				SPC_COPY!short(t.next_time);
-				SPC_COPY!ubyte(t.divider);
-				copier.extra();
-			}
-			copier.extra();
+	// Saves/loads state
+	enum state_size = 67 * 1024L; // maximum space needed when saving
+	alias copy_func_t = SPC_DSP.copy_func_t;
+	void copy_state(ubyte** io, copy_func_t copy) @safe {
+		auto copier = SPC_State_Copier(io, copy);
+		auto SPC_COPY(T, U)(ref U state) {
+			state = cast(T) copier.copy_int(state, T.sizeof);
+			assert(cast(T) state == state);
 		}
 
-		void saveFullSPC(ubyte[] output) @safe {
-			init_header(output);
-			save_spc(output);
-		}
+		// Make state data more readable by putting 64K RAM, 16 SMP registers,
+		// then DSP (with its 128 registers) first
 
-		// Writes minimal header to spc_out
-		static void init_header(ubyte[] spc_out) @safe {
-			with((cast(spc_file_t[])spc_out[0 .. spc_file_t.sizeof])[0]) {
-				has_id666 = 26; // has none
-				version_ = 30;
-				signature[] = spcSignature;
-				text[] = 0;
-			}
-		}
+		// RAM
+		enable_rom(0); // will get re-enabled if necessary in regs_loaded() below
+		copier.copy(m.ram.ram);
 
-		// Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
-		// Does not set up SPC header; use init_header() for that.
-		void save_spc(ubyte[] spc_out) @safe {
-			spc_file_t* spc = &(cast(spc_file_t[]) spc_out[0 .. spc_file_t.sizeof])[0];
-
-			// CPU
-			spc.pcl = cast(ubyte)(m.cpu_regs.pc >> 0);
-			spc.pch = cast(ubyte)(m.cpu_regs.pc >> 8);
-			spc.a = cast(ubyte) m.cpu_regs.a;
-			spc.x = cast(ubyte) m.cpu_regs.x;
-			spc.y = cast(ubyte) m.cpu_regs.y;
-			spc.psw = cast(ubyte) m.cpu_regs.psw;
-			spc.sp = cast(ubyte) m.cpu_regs.sp;
-
-			// RAM, ROM
-			spc.ram[] = m.ram.ram;
-			if (m.rom_enabled)
-				spc.ram[rom_addr .. rom_addr + m.hi_ram.sizeof] = m.hi_ram;
-			spc.unused[] = 0;
-			spc.ipl_rom[] = m.rom;
-
+		{
 			// SMP registers
-			save_regs(spc.ram[0xF0 .. 0x100]);
-			int i;
-			for (i = 0; i < port_count; i++)
-				spc.ram[0xF0 + r_cpuio0 + i] = m.smp_regs[1][r_cpuio0 + i];
-
-			// DSP registers
-			for (i = 0; i < SPC_DSP.register_count; i++)
-				spc.dsp[i] = cast(ubyte) dsp.read(i);
+			ubyte[port_count] out_ports;
+			ubyte[reg_count] regs;
+			out_ports = m.smp_regs[0][r_cpuio0 .. r_cpuio0 + out_ports.length];
+			save_regs(regs);
+			copier.copy(regs);
+			copier.copy(out_ports);
+			load_regs(regs);
+			regs_loaded();
+			m.smp_regs[0][r_cpuio0 .. r_cpuio0 + out_ports.length] = out_ports;
 		}
 
-		// Returns true if new key-on events occurred since last check. Useful for
-		// trimming silence while saving an SPC.
-		bool check_kon() @safe {
-			return dsp.check_kon();
+		// CPU registers
+		SPC_COPY!ushort(m.cpu_regs.pc);
+		SPC_COPY!ubyte(m.cpu_regs.a);
+		SPC_COPY!ubyte(m.cpu_regs.x);
+		SPC_COPY!ubyte(m.cpu_regs.y);
+		SPC_COPY!ubyte(m.cpu_regs.psw);
+		SPC_COPY!ubyte(m.cpu_regs.sp);
+		copier.extra();
+
+		SPC_COPY!short(m.spc_time);
+		SPC_COPY!short(m.dsp_time);
+
+		// DSP
+		dsp.copy_state(io, copy);
+
+		// Timers
+		for (int i = 0; i < timer_count; i++) {
+			Timer* t = &m.timers[i];
+			SPC_COPY!short(t.next_time);
+			SPC_COPY!ubyte(t.divider);
+			copier.extra();
 		}
+		copier.extra();
+	}
+
+	void saveFullSPC(ubyte[] output) @safe {
+		init_header(output);
+		save_spc(output);
+	}
+
+	// Writes minimal header to spc_out
+	static void init_header(ubyte[] spc_out) @safe {
+		with((cast(spc_file_t[])spc_out[0 .. spc_file_t.sizeof])[0]) {
+			has_id666 = 26; // has none
+			version_ = 30;
+			signature[] = spcSignature;
+			text[] = 0;
+		}
+	}
+
+	// Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
+	// Does not set up SPC header; use init_header() for that.
+	void save_spc(ubyte[] spc_out) @safe {
+		spc_file_t* spc = &(cast(spc_file_t[]) spc_out[0 .. spc_file_t.sizeof])[0];
+
+		// CPU
+		spc.pcl = cast(ubyte)(m.cpu_regs.pc >> 0);
+		spc.pch = cast(ubyte)(m.cpu_regs.pc >> 8);
+		spc.a = cast(ubyte) m.cpu_regs.a;
+		spc.x = cast(ubyte) m.cpu_regs.x;
+		spc.y = cast(ubyte) m.cpu_regs.y;
+		spc.psw = cast(ubyte) m.cpu_regs.psw;
+		spc.sp = cast(ubyte) m.cpu_regs.sp;
+
+		// RAM, ROM
+		spc.ram[] = m.ram.ram;
+		if (m.rom_enabled)
+			spc.ram[rom_addr .. rom_addr + m.hi_ram.sizeof] = m.hi_ram;
+		spc.unused[] = 0;
+		spc.ipl_rom[] = m.rom;
+
+		// SMP registers
+		save_regs(spc.ram[0xF0 .. 0x100]);
+		int i;
+		for (i = 0; i < port_count; i++)
+			spc.ram[0xF0 + r_cpuio0 + i] = m.smp_regs[1][r_cpuio0 + i];
+
+		// DSP registers
+		for (i = 0; i < SPC_DSP.register_count; i++)
+			spc.dsp[i] = cast(ubyte) dsp.read(i);
+	}
+
+	// Returns true if new key-on events occurred since last check. Useful for
+	// trimming silence while saving an SPC.
+	bool check_kon() @safe {
+		return dsp.check_kon();
 	}
 
 public:
@@ -524,29 +476,6 @@ public:
 
 private:
 	SPC_DSP dsp;
-
-	version (SPC_LESS_ACCURATE) {
-		enum max_reg_time = 29;
-		static immutable byte[256] reg_times_ = [
-			-1, 0, -11, -10, -15, -11, -2, -2, 4, 3, 14, 14, 26, 26, 14, 22,
-			2, 3, 0, 1, -12, 0, 1, 1, 7, 6, 14, 14, 27, 14, 14, 23,
-			5, 6, 3, 4, -1, 3, 4, 4, 10, 9, 14, 14, 26, -5, 14, 23,
-			8, 9, 6, 7, 2, 6, 7, 7, 13, 12, 14, 14, 27, -4, 14, 24,
-			11, 12, 9, 10, 5, 9, 10, 10, 16, 15, 14, 14, -2, -4, 14, 24,
-			14, 15, 12, 13, 8, 12, 13, 13, 19, 18, 14, 14, -2, -36, 14, 24,
-			17, 18, 15, 16, 11, 15, 16, 16, 22, 21, 14, 14, 28, -3, 14, 25,
-			20, 21, 18, 19, 14, 18, 19, 19, 25, 24, 14, 14, 14, 29, 14, 25,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29,
-			29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29
-		];
-		byte[256] reg_times;
-	}
 
 	struct state_t {
 		Timer[timer_count] timers;
@@ -725,9 +654,6 @@ private:
 		m.echo_accessed = 0;
 		m.spc_time = 0;
 		m.dsp_time = 0;
-		version (SPC_LESS_ACCURATE) {
-			m.dsp_time = clocks_per_sample + 1;
-		}
 
 		for (int i = 0; i < timer_count; i++) {
 			Timer* t = &m.timers[i];
@@ -760,13 +686,8 @@ private:
 
 	Timer* run_timer(Timer* t, rel_time_t time) @safe {
 		if (time >= t.next_time) {
-			version (SPC_DISABLE_TEMPO) {
-				int elapsed = ((time - t.next_time) >> t.prescaler) + 1;
-				t.next_time += elapsed << t.prescaler;
-			} else {
-				int elapsed = ((time - t.next_time) / t.prescaler) + 1;
-				t.next_time += elapsed * t.prescaler;
-			}
+			int elapsed = ((time - t.next_time) / t.prescaler) + 1;
+			t.next_time += elapsed * t.prescaler;
 
 			if (t.enabled) {
 				int remain = (cast(ubyte)((t.period - t.divider) - 1) + 1);
@@ -799,29 +720,11 @@ private:
 	}
 
 	void dsp_write(int data, rel_time_t time) @safe {
-		version (SPC_LESS_ACCURATE) {
-			int count = (time) - (reg_times[m.smp_regs[0][r_dspaddr]]) - m.dsp_time;
-			if (count >= 0) {
-				int clock_count = (count & ~(clocks_per_sample - 1)) + clocks_per_sample;
-				m.dsp_time += clock_count;
-				dsp.run(clock_count);
-			} else if (m.dsp_time == skipping_time) {
-				int r = m.smp_regs[0][r_dspaddr];
-				if (r == SPC_DSP.r_kon)
-					m.skipped_kon |= data & ~dsp.read(SPC_DSP.r_koff);
-
-				if (r == SPC_DSP.r_koff) {
-					m.skipped_koff |= data;
-					m.skipped_kon &= ~data;
-				}
-			}
-		} else {
-			int count = (time) - m.dsp_time;
-			if (count) {
-				assert(count > 0);
-				m.dsp_time = (time);
-				dsp.run(count);
-			}
+		int count = (time) - m.dsp_time;
+		if (count) {
+			assert(count > 0);
+			m.dsp_time = (time);
+			dsp.run(count);
 		}
 		static if (is(SPC_DSP_WRITE_HOOK)) {
 			SPC_DSP_WRITE_HOOK(m.spc_time + time, m.smp_regs[0][r_dspaddr], cast(ubyte) data);
@@ -1189,19 +1092,14 @@ private:
 					}
 
 				case 0x6F: // RET
-					version (SPC_NO_SP_WRAPAROUND) {
-						pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
-						sp += 2;
-					} else {
-						addr2 = cast(int)(sp);
-						pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
-						sp += 2;
-						if (addr2 < 0x1FF)
-							goto loop;
+					addr2 = cast(int)(sp);
+					pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
+					sp += 2;
+					if (addr2 < 0x1FF)
+						goto loop;
 
-						(pc = (ram[sp -0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
-						sp -= 0x100;
-					}
+					(pc = (ram[sp -0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
+					sp -= 0x100;
 					goto loop;
 
 				case 0xE4: // MOV a,dp
