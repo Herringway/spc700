@@ -126,18 +126,16 @@ public:
 
 	// Sets destination for output samples
 	alias sample_t = short;
-	void set_output(sample_t[] out_) @system {
+	void set_output(sample_t[] out_) @safe {
 		assert((out_.length & 1) == 0); // size must be even
 
 		m.extra_clocks &= clocks_per_sample - 1;
 		if (out_) {
-			const(sample_t)* out_end = &out_.ptr[out_.length];
-			m.buf_begin = &out_[0];
-			m.buf_end = out_end;
+			m.buf_begin = out_;
 
 			// Copy extra to output
 			const(sample_t)[] in_ = m.extra_buf;
-			while (in_.ptr < &m.extra_buf[0] + m.extra_pos && out_.length > 0) {
+			while (in_.ptr < &m.extra_buf[m.extra_pos] && out_.length > 0) {
 				out_[0] = in_[0];
 				out_ = out_[1 .. $];
 				in_ = in_[1 .. $];
@@ -147,10 +145,9 @@ public:
 			if (out_.length == 0) {
 				// Have DSP write to remaining extra space
 				out_ = dsp.extra();
-				out_end = &dsp.extra()[extra_size];
 
 				// Copy any remaining extra samples as if DSP wrote them
-				while (in_.ptr < &m.extra_buf[0] + m.extra_pos) {
+				while (in_.ptr < &m.extra_buf[m.extra_pos]) {
 					out_[0] = in_[0];
 					out_ = out_[1 .. $];
 					in_ = in_[1 .. $];
@@ -577,8 +574,7 @@ private:
 		const(char)* cpu_error;
 
 		int extra_clocks;
-		sample_t* buf_begin;
-		const(sample_t)* buf_end;
+		sample_t[] buf_begin;
 		size_t extra_pos;
 		sample_t[extra_size] extra_buf;
 
@@ -683,23 +679,26 @@ private:
 
 	void save_extra() @system {
 		// Get end pointers
-		const(sample_t)* main_end = m.buf_end; // end of data written to buf
+		const(sample_t)* main_end = &m.buf_begin.ptr[m.buf_begin.length]; // end of data written to buf
 		const(sample_t)* dsp_end = &dsp.out_pos()[0]; // end of data written to dsp.extra()
-		if (m.buf_begin <= dsp_end && dsp_end <= main_end) {
+		if (&m.buf_begin[0] <= dsp_end && dsp_end <= main_end) {
 			main_end = dsp_end;
 			dsp_end = &dsp.extra()[0]; // nothing in DSP's extra
 		}
 
 		// Copy any extra samples at these ends into extra_buf
-		sample_t* out_ = &m.extra_buf[0];
-		const(sample_t)* in_;
-		for (in_ = m.buf_begin + sample_count(); in_ < main_end; in_++)
-			*out_++ = *in_;
-		for (in_ = &dsp.extra()[0]; in_ < dsp_end; in_++)
-			*out_++ = *in_;
+		sample_t[] out_ = m.extra_buf[];
+		foreach (sample; m.buf_begin.ptr[sample_count() .. main_end - &m.buf_begin[0]]) {
+			out_[0] = sample;
+			out_ = out_[1 .. $];
+		}
+		foreach (sample; dsp.extra()[0 .. dsp_end - &dsp.extra()[0]]) {
+			out_[0] = sample;
+			out_ = out_[1 .. $];
+		}
 
-		m.extra_pos = out_ - &m.extra_buf[0];
-		assert(out_ <= &m.extra_buf.ptr[extra_size]);
+		m.extra_pos = &out_[0] - &m.extra_buf[0];
+		assert(&out_[0] <= &m.extra_buf.ptr[extra_size]);
 	}
 	// Loads registers from unified 16-byte format
 	//void load_regs( const(ubyte)[reg_count] in_ ) {
