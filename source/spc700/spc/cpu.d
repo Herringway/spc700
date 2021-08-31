@@ -200,7 +200,7 @@ public:
 	}
 
 	// Runs SPC to end_time and starts a new time frame at 0
-	void end_frame(time_t end_time) @system {
+	void end_frame(time_t end_time) @safe {
 		// Catch CPU up to as close to end as possible. If final instruction
 		// would exceed end, does NOT execute it and leaves m.spc_time < end.
 		if (end_time > m.spc_time)
@@ -333,7 +333,7 @@ public:
 
 	// Plays for count samples and write samples to out. Discards samples if out
 	// is NULL. Count must be a multiple of 2 since output is stereo.
-	const(char)* play(sample_t[] out_) @system {
+	const(char)* play(sample_t[] out_) @safe {
 		assert((out_.length & 1) == 0); // must be even
 		if (out_) {
 			set_output(out_);
@@ -345,7 +345,7 @@ public:
 		return err;
 	}
 
-	const(char)* play(int count) @system {
+	const(char)* play(int count) @safe {
 		assert((count & 1) == 0); // must be even
 		if (count) {
 			m.extra_clocks &= clocks_per_sample - 1;
@@ -359,7 +359,7 @@ public:
 	}
 
 	// Skips count samples. Several times faster than play() when using fast DSP.
-	const(char)* skip(int count) @system {
+	const(char)* skip(int count) @safe {
 		version (SPC_LESS_ACCURATE) {
 			if (count > 2 * sample_rate * 2) {
 				set_output(null, 0);
@@ -677,28 +677,19 @@ private:
 		dsp.set_output(null);
 	}
 
-	void save_extra() @system {
-		// Get end pointers
-		const(sample_t)* main_end = &m.buf_begin.ptr[m.buf_begin.length]; // end of data written to buf
-		const(sample_t)* dsp_end = &dsp.out_pos()[0]; // end of data written to dsp.extra()
-		if (&m.buf_begin[0] <= dsp_end && dsp_end <= main_end) {
-			main_end = dsp_end;
-			dsp_end = &dsp.extra()[0]; // nothing in DSP's extra
-		}
-
+	void save_extra() @safe {
 		// Copy any extra samples at these ends into extra_buf
 		sample_t[] out_ = m.extra_buf[];
-		foreach (sample; m.buf_begin.ptr[sample_count() .. main_end - &m.buf_begin[0]]) {
+		foreach (sample; m.buf_begin[sample_count() .. $]) { // end of data written to buf
 			out_[0] = sample;
 			out_ = out_[1 .. $];
 		}
-		foreach (sample; dsp.extra()[0 .. dsp_end - &dsp.extra()[0]]) {
+		foreach (sample; dsp.extra()[0 .. $ - dsp.out_pos.length]) { // end of data written to dsp.extra()
 			out_[0] = sample;
 			out_ = out_[1 .. $];
 		}
 
 		m.extra_pos = &out_[0] - &m.extra_buf[0];
-		assert(&out_[0] <= &m.extra_buf.ptr[extra_size]);
 	}
 	// Loads registers from unified 16-byte format
 	//void load_regs( const(ubyte)[reg_count] in_ ) {
