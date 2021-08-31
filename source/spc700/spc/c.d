@@ -132,12 +132,12 @@ void spc_clear_echo(SNES_SPC* s) {
 /* Plays for count samples and write samples to out. Discards samples if out
 is NULL. Count must be a multiple of 2 since output is stereo. */
 const(char*) spc_play(SNES_SPC* s, int count, short* out_) {
-	return s.play(out_[0 .. count]);
+	return s.play(out_[0 .. count]).ptr;
 }
 
 /* Skips count samples. Several times faster than spc_play(). */
 const(char*) spc_skip(SNES_SPC* s, int count) {
-	return s.skip(count);
+	return s.skip(count).ptr;
 }
 
 /**** State save/load (only available with accurate DSP) ****/

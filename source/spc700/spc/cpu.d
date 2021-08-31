@@ -333,19 +333,19 @@ public:
 
 	// Plays for count samples and write samples to out. Discards samples if out
 	// is NULL. Count must be a multiple of 2 since output is stereo.
-	const(char)* play(sample_t[] out_) @safe {
+	string play(sample_t[] out_) @safe {
 		assert((out_.length & 1) == 0); // must be even
 		if (out_) {
 			set_output(out_);
 			end_frame(cast(int)(out_.length * (clocks_per_sample / 2)));
 		}
 
-		const char* err = m.cpu_error;
+		string err = m.cpu_error;
 		m.cpu_error = null;
 		return err;
 	}
 
-	const(char)* play(int count) @safe {
+	string play(int count) @safe {
 		assert((count & 1) == 0); // must be even
 		if (count) {
 			m.extra_clocks &= clocks_per_sample - 1;
@@ -353,13 +353,13 @@ public:
 			end_frame(count * (clocks_per_sample / 2));
 		}
 
-		const char* err = m.cpu_error;
+		string err = m.cpu_error;
 		m.cpu_error = null;
 		return err;
 	}
 
 	// Skips count samples. Several times faster than play() when using fast DSP.
-	const(char)* skip(int count) @safe {
+	string skip(int count) @safe {
 		version (SPC_LESS_ACCURATE) {
 			if (count > 2 * sample_rate * 2) {
 				set_output(null, 0);
@@ -571,7 +571,7 @@ private:
 		int tempo;
 		int skipped_kon;
 		int skipped_koff;
-		const(char)* cpu_error;
+		string cpu_error;
 
 		int extra_clocks;
 		sample_t[] buf_begin;
