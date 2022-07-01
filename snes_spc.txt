@@ -24,29 +24,11 @@ Contents
 * Thanks
 
 
-C and C++ Interfaces
+C and D Interfaces
 --------------------
 The library includes a C interface in spc.h and dsp.h, which can be used
-from C and C++. This C interface is referred to in the following
-documentation. If you're building this as a shared library (rather than
-linking statically), you should use the C interface since it will change
-less in future versions.
-
-The native C++ interface is in the header files SNES_SPC.h, SPC_DSP.h,
-and SPC_Filter.h, and the two interfaces can be freely mixed in C++
-code. Conversion between the two interfaces generally follows a pattern:
-
-	C interface                     C++ interface
-	- - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	SNES_SPC* spc;                  SNES_SPC* spc;
-
-	spc = spc_new();                spc = new SNES_SPC;
-
-	spc_play( spc, count, buf );    spc->play( count, buf );
-
-	spc_sample_rate                 SNES_SPC::sample_rate
-
-	spc_delete( spc );              delete spc;
+from C. This C interface is referred to in the following
+documentation.
 
 
 Overview
