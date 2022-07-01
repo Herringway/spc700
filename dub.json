@@ -5,6 +5,5 @@
 	"targetType": "library",
 	"subPackages": [
 		"player"
-	],
-	"dflags": ["-checkaction=C"]
+	]
 }
