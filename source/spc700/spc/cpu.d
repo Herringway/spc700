@@ -187,12 +187,14 @@ public:
 	enum port_count = 4;
 	int read_port(time_t t, int port) @safe {
 		assert(cast(uint) port < port_count);
-		return run_until_(t)[port];
+		run_until_(t);
+		return m.smp_regs[0][r_cpuio0 + port];
 	}
 
 	void write_port(time_t t, int port, int data) @safe {
 		assert(cast(uint) port < port_count);
-		run_until_(t)[0x10 + port] = cast(ubyte) data;
+		run_until_(t);
+		m.smp_regs[1][r_cpuio0 + port] = cast(ubyte) data;
 	}
 
 	// Runs SPC to end_time and starts a new time frame at 0
