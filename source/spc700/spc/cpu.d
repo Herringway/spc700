@@ -13,7 +13,7 @@ const int cpu_lag_max = 12 - 1; // DIV YA,X takes 12 clocks
 
 enum SPC_MORE_ACCURACY = 0;
 
-uint get_le16(const ubyte[] p) @safe nothrow {
+uint get_le16(scope const ubyte[] p) @safe nothrow {
 	return cast(uint)p[1] << 8 | cast(uint)p[0];
 }
 
@@ -954,7 +954,7 @@ private:
 		return result;
 	}
 
-	uint CPU_mem_bit(const(ubyte)[] pc, rel_time_t rel_time) @safe {
+	uint CPU_mem_bit(scope const(ubyte)[] pc, rel_time_t rel_time) @safe {
 		uint addr = get_le16(pc);
 		uint t = cpu_read((addr & 0x1FFF), rel_time + (0)) >> (addr >> 13);
 		return t << 8 & 0x100;

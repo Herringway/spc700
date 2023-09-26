@@ -1021,19 +1021,19 @@ private:
 	}
 	// Common combinations of voice steps on different voices. This greatly reduces
 	// code size and allows everything to be inlined in these functions.
-	void voice_V7_V4_V1(voice_t[] v) @safe {
+	void voice_V7_V4_V1(scope voice_t[] v) @safe {
 		voice_V7(v[0]);
 		voice_V1(v[3]);
 		voice_V4(v[1]);
 	}
 
-	void voice_V8_V5_V2(voice_t[] v) @safe {
+	void voice_V8_V5_V2(scope voice_t[] v) @safe {
 		voice_V8(v[0]);
 		voice_V5(v[1]);
 		voice_V2(v[2]);
 	}
 
-	void voice_V9_V6_V3(voice_t[] v) @safe {
+	void voice_V9_V6_V3(scope voice_t[] v) @safe {
 		voice_V9(v[0]);
 		voice_V6(v[1]);
 		voice_V3(v[2]);
