@@ -301,6 +301,27 @@ public:
 
 		return null;
 	}
+	void load_buffer(scope const(ubyte)[] data, ushort start) @safe {
+		// CPU registers
+		m.cpu_regs.pc = start;
+		m.cpu_regs.a = 0;
+		m.cpu_regs.x = 0;
+		m.cpu_regs.y = 0;
+		m.cpu_regs.psw = 0;
+		m.cpu_regs.sp = 0xEF;
+
+		// RAM and registers
+		m.ram.ram[] = data;
+		m.ram.ram[2 .. 0x100] = 0;
+		(cast(ushort[])m.ram.ram[0 .. 2])[0] = start;
+		m.ram.ram[0xF2] = 0x2C;
+		ram_loaded();
+
+		// DSP registers
+		dsp.reset();
+
+		reset_time_regs();
+	}
 
 	// Clears echo region. Useful after loading an SPC as many have garbage in echo.
 	void clear_echo() @safe {
