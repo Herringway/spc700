@@ -190,10 +190,19 @@ public:
 		run_until_(t);
 		return m.smp_regs[0][r_cpuio0 + port];
 	}
+	int read_port_now(int port) @safe {
+		assert(cast(uint) port < port_count);
+		return m.smp_regs[0][r_cpuio0 + port];
+	}
 
 	void write_port(time_t t, int port, int data) @safe {
 		assert(cast(uint) port < port_count);
 		run_until_(t);
+		m.smp_regs[1][r_cpuio0 + port] = cast(ubyte) data;
+	}
+	void write_port_now(int port, int data) @safe {
+		assert(cast(uint) port < port_count);
+		m.smp_regs[0][r_cpuio0 + port] = cast(ubyte) data;
 		m.smp_regs[1][r_cpuio0 + port] = cast(ubyte) data;
 	}
 
