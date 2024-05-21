@@ -147,7 +147,7 @@ public:
 	// Must be called once before using
 	const(char)* initialize() @safe {
 		m = m.init;
-		dsp.initialize(m.ram.ram);
+		dsp.initialize(m.ram);
 
 		version(opcodeHook) {
 			if (!hook) {
@@ -222,7 +222,7 @@ public:
 	// Resets SPC to power-on state. This resets your output buffer, so you must
 	// call set_output() after this.
 	void reset() @safe {
-		m.ram.ram = state_t.init.ram.ram;
+		m.ram = state_t.init.ram;
 		ram_loaded();
 		reset_common(0x0F);
 		dsp.reset();
@@ -357,7 +357,7 @@ public:
 		m.cpu_regs.sp = spc.sp;
 
 		// RAM and registers
-		m.ram.ram[] = spc.ram;
+		m.ram[] = spc.ram;
 		ram_loaded();
 
 		// DSP registers
@@ -377,10 +377,10 @@ public:
 		m.cpu_regs.sp = 0xEF;
 
 		// RAM and registers
-		m.ram.ram[0 .. data.length] = data;
-		m.ram.ram[2 .. 0x100] = 0;
-		(cast(ushort[])m.ram.ram[0 .. 2])[0] = start;
-		m.ram.ram[0xF2] = 0x2C;
+		m.ram[0 .. data.length] = data;
+		m.ram[2 .. 0x100] = 0;
+		(cast(ushort[])m.ram[0 .. 2])[0] = start;
+		m.ram[0xF2] = 0x2C;
 		ram_loaded();
 
 		// DSP registers
@@ -396,7 +396,7 @@ public:
 			int end = addr + 0x800 * (dsp.read(SPC_DSP.r_edl) & 0x0F);
 			if (end > 0x10000)
 				end = 0x10000;
-			m.ram.ram[addr .. end] = 0xFF;
+			m.ram[addr .. end] = 0xFF;
 		}
 	}
 
@@ -449,7 +449,7 @@ public:
 
 		// RAM
 		enable_rom(0); // will get re-enabled if necessary in regs_loaded() below
-		copier.copy(m.ram.ram);
+		copier.copy(m.ram);
 
 		{
 			// SMP registers
@@ -519,7 +519,7 @@ public:
 		spc.sp = cast(ubyte) m.cpu_regs.sp;
 
 		// RAM, ROM
-		spc.ram[] = m.ram.ram;
+		spc.ram[] = m.ram;
 		if (m.rom_enabled)
 			spc.ram[rom_addr .. rom_addr + m.hi_ram.sizeof] = m.hi_ram;
 		spc.unused[] = 0;
@@ -619,14 +619,7 @@ private:
 			0x4, 0x8, 0x4, 0x7, 0x4, 0x5, 0x5, 0x6, 0x3, 0x4, 0x5, 0x4, 0x2, 0x2, 0x6, 0x0,
 		];
 
-		struct Ram {
-			align(1):
-			ubyte[0x100] padding1;
-			ubyte[0x10000] ram = 0xFF;
-			ubyte[0x100] padding2;
-		}
-
-		Ram ram;
+		ubyte[0x10000] ram;
 	}
 
 	state_t m;
@@ -675,8 +668,8 @@ private:
 		if (m.rom_enabled != enable) {
 			m.rom_enabled = enable;
 			if (enable)
-				m.hi_ram[] = m.ram.ram[rom_addr .. rom_addr + m.hi_ram.sizeof];
-			m.ram.ram[rom_addr .. rom_addr + rom_size] = (enable ? m.rom[0 .. rom_size] : m.hi_ram[0 .. rom_size]);
+				m.hi_ram[] = m.ram[rom_addr .. rom_addr + m.hi_ram.sizeof];
+			m.ram[rom_addr .. rom_addr + rom_size] = (enable ? m.rom[0 .. rom_size] : m.hi_ram[0 .. rom_size]);
 			// TODO: ROM can still get overwritten when DSP writes to echo buffer
 		}
 	}
@@ -726,11 +719,7 @@ private:
 	// and timer counts. Copies these to proper registers.
 	void ram_loaded() @safe {
 		m.rom_enabled = 0;
-		load_regs(m.ram.ram[0xF0 .. 0x100]);
-
-		// Put STOP instruction around memory to catch PC underflow/overflow
-		m.ram.padding1 = cpu_pad_fill;
-		m.ram.padding2 = cpu_pad_fill;
+		load_regs(m.ram[0xF0 .. 0x100]);
 	}
 	// Registers were just loaded. Applies these new values.
 	void regs_loaded() @safe {
@@ -930,10 +919,10 @@ private:
 		if (i < rom_size) {
 			m.hi_ram[i] = cast(ubyte) data;
 			if (m.rom_enabled)
-				m.ram.ram[i + rom_addr] = m.rom[i]; // restore overwritten ROM
+				m.ram[i + rom_addr] = m.rom[i]; // restore overwritten ROM
 		} else {
-			assert(m.ram.ram[i + rom_addr] == cast(ubyte) data);
-			m.ram.ram[i + rom_addr] = cpu_pad_fill; // restore overwritten padding
+			assert(m.ram[i + rom_addr] == cast(ubyte) data);
+			m.ram[i + rom_addr] = cpu_pad_fill; // restore overwritten padding
 			cpu_write(data, i + rom_addr - 0x10000, time);
 		}
 	}
@@ -954,7 +943,7 @@ private:
 		}
 
 		// RAM
-		m.ram.ram[addr] = cast(ubyte) data;
+		m.ram[addr] = cast(ubyte) data;
 		int reg = addr - 0xF0;
 		if (reg >= 0) // 64%
 		{
@@ -1012,7 +1001,7 @@ private:
 		}
 
 		// RAM
-		int result = m.ram.ram[addr];
+		int result = m.ram[addr];
 		int reg = addr - 0xF0;
 		if (reg >= 0) // 40%
 		{
@@ -1073,7 +1062,7 @@ private:
 		m.timers[2].next_time += rel_time;
 
 		{
-			ubyte[] ram = m.ram.ram;
+			ubyte[] ram = m.ram;
 			CPUState cpuState;
 			cpuState.a = m.cpu_regs.a;
 			cpuState.x = m.cpu_regs.x;
