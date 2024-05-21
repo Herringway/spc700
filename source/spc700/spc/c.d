@@ -192,7 +192,7 @@ void spc_filter_clear(SPC_Filter* f) {
 spc_filter_gain_unit are fine, since output is clamped to 16-bit sample range. */
 enum spc_filter_gain_unit = 0x100;
 void spc_filter_set_gain(SPC_Filter* f, int gain) {
-	f.set_gain(gain);
+	f.gain = gain;
 }
 
 /* Sets amount of bass (logarithmic scale) */
@@ -200,5 +200,5 @@ enum spc_filter_bass_none = 0;
 enum spc_filter_bass_norm = 8; /* normal amount */
 enum spc_filter_bass_max = 31;
 void spc_filter_set_bass(SPC_Filter* f, int bass) {
-	f.set_bass(bass);
+	f.bass = bass;
 }

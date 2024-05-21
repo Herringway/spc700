@@ -35,21 +35,23 @@ bool initAudio(SDL_AudioCallback fun, ubyte channels, uint sampleRate, void* use
 }
 
 extern (C) void _sampling_func(void* user, ubyte* buf, int bufSize) nothrow {
-	auto snes_spc = cast(SNES_SPC*)user;
-	/* Play into buffer */
-	snes_spc.play((cast(short*)buf)[0 .. bufSize / 2]);
-
-	/* Filter samples */
-	filter.run((cast(short*)buf)[0 .. bufSize /2]);
+	sampleFunc(*cast(SNES_SPC*)user, (cast(short*)buf)[0 .. bufSize / 2]);
 }
 
-__gshared SPC_Filter filter;
+void sampleFunc(ref SNES_SPC spc, short[] buffer) @safe nothrow {
+	/* Play into buffer */
+	spc.play(buffer);
+
+	/* Filter samples */
+	filter.run(buffer);
+}
+
+SPC_Filter filter;
 int main(string[] args)
 {
 	/* Create emulator and filter */
 	SNES_SPC snes_spc;
 	snes_spc.initialize();
-	filter = SPC_Filter();
 
 	/* Load SPC */
 	{
@@ -64,7 +66,6 @@ int main(string[] args)
 		snes_spc.clear_echo();
 
 		/* Clear filter before playing */
-		filter.clear();
 	}
 	if (!initAudio(&_sampling_func, 2, SNES_SPC.sample_rate, &snes_spc)) {
 		return 1;

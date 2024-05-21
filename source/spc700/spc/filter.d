@@ -69,24 +69,17 @@ public:
 
 	// Sets gain (volume), where gain_unit is normal. Gains greater than gain_unit
 	// are fine, since output is clamped to 16-bit sample range.
-	enum gain_unit = 0x100;
-	void set_gain(int g) @safe {
-		gain = g;
-	}
+	int gain = 0x100;
 
 	// Sets amount of bass (logarithmic scale)
 	enum bass_none = 0;
 	enum bass_norm = 8; // normal amount
 	enum bass_max = 31;
-	void set_bass(int b) @safe {
-		bass = b;
-	}
 
+	int bass = bass_norm;
 private:
 	enum gain_bits = 8;
-	int gain = gain_unit;
-	int bass = bass_norm;
-	struct chan_t {
+	static struct chan_t {
 		int p1, pp1, sum;
 	}
 	chan_t[2] ch;
