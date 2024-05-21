@@ -9,6 +9,10 @@ import core.stdc.string;
 
 import spc700.dsp.dsp;
 
+version(unittest) {
+	version = opcodeHook;
+}
+
 const int cpu_lag_max = 12 - 1; // DIV YA,X takes 12 clocks
 
 enum SPC_MORE_ACCURACY = 0;
@@ -89,7 +93,55 @@ immutable ubyte[256][3] glitch_probs = [
 		0xD1, 0x43, 0x91, 0x20, 0xA9, 0x2D, 0x54, 0x12, 0x17, 0x07, 0x09, 0x02, 0x0C, 0x04, 0x05, 0x03
 	]
 ];
+
+immutable opcodeLengths = [
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 1, 3, 1,
+	2, 1, 2, 3, 2, 3, 3, 2, 3, 1, 2, 2, 1, 1, 3, 3,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 1, 3, 2,
+	2, 1, 2, 3, 2, 3, 3, 2, 3, 1, 2, 2, 1, 1, 2, 3,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 1, 3, 2,
+	2, 1, 2, 3, 2, 3, 3, 2, 3, 1, 2, 2, 1, 1, 3, 3,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 1, 3, 1,
+	2, 1, 2, 3, 2, 3, 3, 2, 3, 1, 2, 2, 1, 1, 2, 1,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 2, 1, 3,
+	2, 1, 2, 3, 2, 3, 3, 2, 3, 1, 2, 2, 1, 1, 1, 1,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 2, 1, 1,
+	2, 1, 2, 3, 2, 3, 3, 2, 3, 1, 2, 2, 1, 1, 1, 1,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 2, 1, 1,
+	2, 1, 2, 3, 2, 3, 3, 2, 2, 2, 2, 2, 1, 1, 3, 1,
+	1, 1, 2, 3, 2, 3, 1, 2, 2, 3, 3, 2, 3, 1, 1, 1,
+	2, 1, 2, 3, 2, 3, 3, 2, 2, 2, 3, 2, 1, 1, 2, 1,
+];
+immutable mnemonics = [
+	"NOP", "TCALL", "CLR0", "BBS0", "ORZ", "OR", "OR", "OR", "OR", "OR", "OR1", "ASLZ", "ASL", "PUSH", "TSET1", "BRK",
+	"BPL", "TCALL", "SET0", "BBC0", "ORZ", "OR", "OR", "OR", "OR", "OR", "DECW", "ASL", "ASL", "DEC", "CMP", "JMP",
+	"CLRP", "TCALL", "CLR1", "BBS1", "ANDZ", "AND", "AND", "AND", "AND", "AND", "OR1", "ROLZ", "ROL", "PUSH", "CBNE", "BRA",
+	"BMI", "TCALL", "SET1", "BBC1", "ANDZ", "AND", "AND", "AND", "AND", "AND", "INCW", "ROL", "ROL", "INC", "CMP", "CALL",
+	"SETP", "TCALL", "CLR2", "BBS2", "EORZ", "EOR", "EOR", "EOR", "EOR", "EOR", "AND1", "LSRZ", "LSR", "PUSH", "TCLR1", "PCALL",
+	"BVC", "TCALL", "SET2", "BBC2", "EORZ", "EOR", "EOR", "EOR", "EOR", "EOR", "CLRW", "LSR", "LSR", "MOV", "CMP", "JMP",
+	"CLRC", "TCALL", "CLR3", "BBS3", "CMPZ", "CMP", "CMP", "CMP", "CMP", "CMP", "AND1", "ROR", "ROR", "PUSH", "DBNZ", "RET",
+	"BVS", "TCALL", "SET3", "BBC3", "CMPZ", "CMP", "CMP", "CMP", "CMP", "CMP", "ADDW", "ROR", "ROR", "MOV", "CMP", "RETI",
+	"SETC", "TCALL", "CLR4", "BBS4", "ADCZ", "ADC", "ADC", "ADC", "ADC", "ADC", "EOR1", "DECZ", "DEC", "MOV", "POP", "MOV",
+	"BCC", "TCALL", "SET4", "BBC4", "ADCZ", "ADC", "ADC", "ADC", "ADC", "MOV", "SUBW", "DEC", "DEC", "MOV", "DIV", "XCN",
+	"EI", "TCALL", "CLR5", "BBS5", "SBCZ", "SBC", "SBC", "SBC", "SBC", "SBC", "MOV1", "INCZ", "INC", "CMP", "POP", "MOV",
+	"BCS", "TCALL", "SET5", "BBC5", "SBCZ", "SBC", "SBC", "SBC", "SBC", "SBC", "MOVW", "INC", "INC", "MOV", "DAS", "MOV",
+	"DI", "TCALL", "CLR6", "BBS6", "MOV", "MOV", "MOV", "MOV", "CMP", "MOV", "MOV1", "MOV", "MOV", "MOV", "POP", "MUL",
+	"BNE", "TCALL", "SET6", "BBC6", "MOV", "MOV", "MOV", "MOV", "MOV", "MOV", "MOVW", "MOV", "DEC", "MOV", "CBNE", "DAA",
+	"CLRV", "TCALL", "CLR7", "BBS7", "MOV", "MOV", "MOV", "MOV", "MOV", "MOV", "NOT1", "MOV", "MOV", "NOTC", "POP", "SLEEP",
+	"BEQ", "TCALL", "SET7", "BBC7", "MOV", "MOV", "MOV", "MOV", "MOV", "MOV", "MOV", "MOV", "INC", "MOV", "DBNZ", "STOP",
+];
+struct CPUState {
+	ushort pc;
+	ushort sp;
+	int a;
+	int x;
+	int y;
+	ubyte psw;
+}
 struct SNES_SPC {
+	version(opcodeHook) {
+		void delegate(scope const ubyte[] op, CPUState state) @safe pure nothrow hook;
+	}
 nothrow:
 public:
 	// Must be called once before using
@@ -97,6 +149,11 @@ public:
 		m = m.init;
 		dsp.initialize(m.ram.ram);
 
+		version(opcodeHook) {
+			if (!hook) {
+				hook = (_, __) {};
+			}
+		}
 		m.tempo = tempo_unit;
 
 		// Most SPC music doesn't need ROM, and almost all the rest only rely
@@ -1016,20 +1073,18 @@ private:
 
 		{
 			ubyte[] ram = m.ram.ram;
-			int a = m.cpu_regs.a;
-			int x = m.cpu_regs.x;
-			int y = m.cpu_regs.y;
-			ushort pc;
-			ushort sp;
-			int psw;
+			CPUState cpuState;
+			cpuState.a = m.cpu_regs.a;
+			cpuState.x = m.cpu_regs.x;
+			cpuState.y = m.cpu_regs.y;
+			cpuState.psw = cast(ubyte)m.cpu_regs.psw;
 			int c;
 			int nz;
 			int dp;
 
-			pc = cast(ushort)m.cpu_regs.pc;
-			sp = cast(ushort)(0x101 + m.cpu_regs.sp);
+			cpuState.pc = cast(ushort)m.cpu_regs.pc;
+			cpuState.sp = cast(ushort)(0x101 + m.cpu_regs.sp);
 			{
-				psw = m.cpu_regs.psw;
 				c = m.cpu_regs.psw << 8;
 				dp = m.cpu_regs.psw << 3 & 0x100;
 				nz = (m.cpu_regs.psw << 4 & 0x800) | (~m.cpu_regs.psw & z02);
@@ -1040,23 +1095,23 @@ private:
 			// Main loop
 
 		cbranch_taken_loop:
-			pc += cast(byte)ram[pc];
+			cpuState.pc += cast(byte)ram[cpuState.pc];
 		inc_pc_loop:
-			pc++;
+			cpuState.pc++;
 		loop: while (true) {
 				uint opcode;
 				uint data;
 
-				assert(cast(uint) a < 0x100);
-				assert(cast(uint) x < 0x100);
-				assert(cast(uint) y < 0x100);
+				assert(cast(uint) cpuState.a < 0x100);
+				assert(cast(uint) cpuState.x < 0x100);
+				assert(cast(uint) cpuState.y < 0x100);
 
-				opcode = ram[pc];
+				opcode = ram[cpuState.pc];
 				if ((rel_time += m.cycle_table[opcode]) > 0)
 					break;
 
-				static if (is(SPC_CPU_OPCODE_HOOK)) {
-					SPC_CPU_OPCODE_HOOK(pc, opcode);
+				version(opcodeHook) {
+					hook(ram[cpuState.pc .. cpuState.pc + opcodeLengths[opcode]], cpuState);
 				}
 				/*
 		//SUB_CASE_COUNTER( 1 );
@@ -1074,8 +1129,8 @@ private:
 		*/
 
 				// TODO: if PC is at end of memory, this will get wrong operand (very obscure)
-				++pc;
-				data = ram[pc];
+				++cpuState.pc;
+				data = ram[cpuState.pc];
 				uint addr;
 				int addr2;
 				int temp;
@@ -1085,11 +1140,11 @@ private:
 
 				case 0xF0: // BEQ
 				{
-						pc++;
-						pc += cast(byte) data;
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
 						if (!cast(ubyte) nz)
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -1097,48 +1152,48 @@ private:
 
 				case 0xD0: // BNE
 				{
-						pc++;
-						pc += cast(byte) data;
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
 						if (cast(ubyte) nz)
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
 					// BRANCH( (ubyte) nz )
 
 				case 0x3F: { // CALL
-						int old_addr = cast(int)(pc + 2);
-						pc = (cast(ushort[])(ram[pc .. pc + 2]))[0];
+						int old_addr = cast(int)(cpuState.pc + 2);
+						cpuState.pc = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
 						{ // PUSH16( old_addr );
-							addr2 = cast(int)((sp -= 2));
+							addr2 = cast(int)((cpuState.sp -= 2));
 							if (addr2 > 0x100) {
-								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) old_addr;
+								(cast(ushort[])(ram[cpuState.sp .. cpuState.sp + 2]))[0] = cast(ushort) old_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) old_addr;
-								ram[sp + 1] = cast(ubyte)(old_addr >> 8);
-								sp += 0x100;
+								ram[cpuState.sp + 1] = cast(ubyte)(old_addr >> 8);
+								cpuState.sp += 0x100;
 							}
 						}
 						break;
 					}
 
 				case 0x6F: // RET
-					addr2 = cast(int)(sp);
-					pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
-					sp += 2;
+					addr2 = cast(int)(cpuState.sp);
+					cpuState.pc = (cast(ushort[])(ram[cpuState.sp .. cpuState.sp + 2]))[0];
+					cpuState.sp += 2;
 					if (addr2 < 0x1FF)
 						break;
 
-					(pc = (ram[sp -0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
-					sp -= 0x100;
+					(cpuState.pc = (ram[cpuState.sp -0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
+					cpuState.sp -= 0x100;
 					break;
 
 				case 0xE4: // MOV a,dp
-					++pc;
+					++cpuState.pc;
 					// 80% from timer
 					{
-						a = nz = cpu_read(dp + data, rel_time);
+						cpuState.a = nz = cpu_read(dp + data, rel_time);
 					}
 					break;
 
@@ -1150,8 +1205,8 @@ private:
 					}
 					goto case;
 				case 0x8F: { // MOV dp,#imm
-						temp = ram[pc + 1];
-						pc += 2;
+						temp = ram[cpuState.pc + 1];
+						cpuState.pc += 2;
 
 						version (SPC_MORE_ACCURACY) {
 							cpu_write(data, dp + temp, rel_time);
@@ -1173,22 +1228,22 @@ private:
 					}
 
 				case 0xC4: // MOV dp,a
-					++pc;
+					++cpuState.pc;
 					version (SPC_MORE_ACCURACY) {
 						cpu_write(a, dp + data, rel_time);
 					} else {
 						int i = dp + data;
-						ram[i] = cast(ubyte) a;
+						ram[i] = cast(ubyte) cpuState.a;
 						i -= 0xF0;
 						if (cast(uint) i < 0x10) // 39%
 						{
 							uint sel = i - 2;
-							m.smp_regs[0][i] = cast(ubyte) a;
+							m.smp_regs[0][i] = cast(ubyte) cpuState.a;
 
 							if (sel == 1) // 51% $F3
-								dsp_write(a, rel_time);
+								dsp_write(cpuState.a, rel_time);
 							else if (sel > 1) // 1% not $F2 or $F3
-								cpu_write_smp_reg_(a, rel_time, i);
+								cpu_write_smp_reg_(cpuState.a, rel_time, i);
 						}
 					}
 					break;
@@ -1196,214 +1251,214 @@ private:
 					// 1. 8-bit Data Transmission Commands. Group I
 
 				case 0xE8 - 0x02: /* (X) */
-					data = x + dp;
-					a = nz = cpu_read(data, rel_time);
+					data = cpuState.x + dp;
+					cpuState.a = nz = cpu_read(data, rel_time);
 					break;
 				case 0xE8 + 0x0F: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 					goto end_0xE8;
 				case 0xE8 - 0x01: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0xE8;
 				case 0xE8 + 0x0E: /* abs+Y */
-					data += y;
+					data += cpuState.y;
 					goto case 0xE8 - 0x03;
 				case 0xE8 + 0x0D: /* abs+X */
-					data += x;
+					data += cpuState.x;
 					goto case 0xE8 - 0x03;
 				case 0xE8 - 0x03: /* abs */
 				abs_0xE8:
-					++pc;
-					data += 0x100 * ram[pc];
+					++cpuState.pc;
+					data += 0x100 * ram[cpuState.pc];
 					goto end_0xE8;
 				case 0xE8 + 0x0C: /* dp+X */
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					data += dp;
 				end_0xE8: // MOV A,addr
-					a = nz = cpu_read(data, rel_time);
-					pc++;
+					cpuState.a = nz = cpu_read(data, rel_time);
+					cpuState.pc++;
 					break;
 
 				case 0xBF: { // MOV A,(X)+
-						temp = x + dp;
-						x = cast(ubyte)(x + 1);
-						a = nz = cpu_read(temp, rel_time - 1);
+						temp = cpuState.x + dp;
+						cpuState.x = cast(ubyte)(cpuState.x + 1);
+						cpuState.a = nz = cpu_read(temp, rel_time - 1);
 						break;
 					}
 
 				case 0xE8: // MOV A,imm
-					a = data;
+					cpuState.a = data;
 					nz = data;
-					pc++;
+					cpuState.pc++;
 					break;
 
 				case 0xF9: // MOV X,dp+Y
-					data = cast(ubyte)(data + y);
+					data = cast(ubyte)(data + cpuState.y);
 					goto case;
 				case 0xF8: // MOV X,dp
 				{
-						x = nz = cpu_read(dp + data, rel_time);
+						cpuState.x = nz = cpu_read(dp + data, rel_time);
 					}
-					pc++;
+					cpuState.pc++;
 					break;
 
 				case 0xE9: // MOV X,abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					++pc;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					++cpuState.pc;
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0xCD: // MOV X,imm
-					x = data;
+					cpuState.x = data;
 					nz = data;
 					goto inc_pc_loop;
 
 				case 0xFB: // MOV Y,dp+X
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0xEB: // MOV Y,dp
 					// 70% from timer
-					pc++;
+					cpuState.pc++;
 					{
-						y = nz = cpu_read(dp + data, rel_time);
+						cpuState.y = nz = cpu_read(dp + data, rel_time);
 					}
 					break;
 
 				case 0xEC: { // MOV Y,abs
-						temp = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-						pc += 2;
+						temp = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+						cpuState.pc += 2;
 						{
-							y = nz = cpu_read(temp, rel_time);
+							cpuState.y = nz = cpu_read(temp, rel_time);
 						}
 						break;
 					}
 
 				case 0x8D: // MOV Y,imm
-					y = data;
+					cpuState.y = data;
 					nz = data;
 					goto inc_pc_loop;
 
 					// 2. 8-BIT DATA TRANSMISSION COMMANDS, GROUP 2
 
 				case 0xC8 - 0x02: /* (X) */
-					data = x + dp;
-					pc--;
+					data = cpuState.x + dp;
+					cpuState.pc--;
 					goto end_0xC8;
 				case 0xC8 + 0x0F: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 					goto end_0xC8;
 				case 0xC8 - 0x01: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0xC8;
 				case 0xC8 + 0x0E: /* abs+Y */
-					data += y;
+					data += cpuState.y;
 					goto abs_0xC8;
 				case 0xC8 + 0x0D: /* abs+X */
-					data += x;
+					data += cpuState.x;
 					goto case;
 				case 0xC8 - 0x03: /* abs */
 				abs_0xC8:
-					++pc;
-					data += 0x100 * ram[pc];
+					++cpuState.pc;
+					data += 0x100 * ram[cpuState.pc];
 					goto end_0xC8;
 				case 0xC8 + 0x0C: /* dp+X */
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					data += dp;
 				end_0xC8: // MOV addr,A
-					cpu_write(a, data, rel_time);
+					cpu_write(cpuState.a, data, rel_time);
 					goto inc_pc_loop;
 
 					{
 						// int temp;
 				case 0xCC: // MOV abs,Y
-						temp = y;
+						temp = cpuState.y;
 						goto mov_abs_temp;
 				case 0xC9: // MOV abs,X
-						temp = x;
+						temp = cpuState.x;
 				mov_abs_temp:
-						cpu_write(temp, (cast(ushort[])(ram[pc .. pc + 2]))[0], rel_time);
-						pc += 2;
+						cpu_write(temp, (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0], rel_time);
+						cpuState.pc += 2;
 						break;
 					}
 
 				case 0xD9: // MOV dp+Y,X
-					data = cast(ubyte)(data + y);
+					data = cast(ubyte)(data + cpuState.y);
 					goto case;
 				case 0xD8: // MOV dp,X
-					cpu_write(x, data + dp, rel_time);
+					cpu_write(cpuState.x, data + dp, rel_time);
 					goto inc_pc_loop;
 
 				case 0xDB: // MOV dp+X,Y
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0xCB: // MOV dp,Y
-					cpu_write(y, data + dp, rel_time);
+					cpu_write(cpuState.y, data + dp, rel_time);
 					goto inc_pc_loop;
 
 					// 3. 8-BIT DATA TRANSMISSIN COMMANDS, GROUP 3.
 
 				case 0x7D: // MOV A,X
-					a = x;
-					nz = x;
+					cpuState.a = cpuState.x;
+					nz = cpuState.x;
 					break;
 
 				case 0xDD: // MOV A,Y
-					a = y;
-					nz = y;
+					cpuState.a = cpuState.y;
+					nz = cpuState.y;
 					break;
 
 				case 0x5D: // MOV X,A
-					x = a;
-					nz = a;
+					cpuState.x = cpuState.a;
+					nz = cpuState.a;
 					break;
 
 				case 0xFD: // MOV Y,A
-					y = a;
-					nz = a;
+					cpuState.y = cpuState.a;
+					nz = cpuState.a;
 					break;
 
 				case 0x9D: // MOV X,SP
-					x = nz = cast(int)(sp - 0x101);
+					cpuState.x = nz = cast(int)(cpuState.sp - 0x101);
 					break;
 
 				case 0xBD: // MOV SP,X
-					sp = cast(ushort)(0x101 + x);
+					cpuState.sp = cast(ushort)(0x101 + cpuState.x);
 					break;
 
 					//case 0xC6: // MOV (X),A (handled by MOV addr,A in group 2)
 
 				case 0xAF: // MOV (X)+,A
-					cpu_write(a + no_read_before_write, dp + x, rel_time);
-					x++;
+					cpu_write(cpuState.a + no_read_before_write, dp + cpuState.x, rel_time);
+					cpuState.x++;
 					break;
 
 					// 5. 8-BIT LOGIC OPERATION COMMANDS
 
 				case 0x28 - 0x02: /* (X) */
-					data = x + dp;
-					pc--;
+					data = cpuState.x + dp;
+					cpuState.pc--;
 					goto end_0x28;
 				case 0x28 + 0x0F: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 					goto end_0x28;
 				case 0x28 - 0x01: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x28;
 				case 0x28 + 0x0E: /* abs+Y */
-					data += y;
+					data += cpuState.y;
 					goto abs_0x28;
 				case 0x28 + 0x0D: /* abs+X */
-					data += x;
+					data += cpuState.x;
 					goto case;
 				case 0x28 - 0x03: /* abs */
 				abs_0x28:
-					++pc;
-					data += 0x100 * ram[pc];
+					++cpuState.pc;
+					data += 0x100 * ram[cpuState.pc];
 					goto end_0x28;
 				case 0x28 + 0x0C: /* dp+X */
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x28 - 0x04: /* dp */
 					data += dp;
@@ -1411,19 +1466,19 @@ private:
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0x28: /* imm */
-					nz = a &= data;
+					nz = cpuState.a &= data;
 					goto inc_pc_loop;
 					{ //uint addr;
 				case 0x28 + 0x11: /* X,Y */
-						data = cpu_read(dp + y, rel_time - 2);
-						addr = x + dp;
+						data = cpu_read(dp + cpuState.y, rel_time - 2);
+						addr = cpuState.x + dp;
 						goto addr_0x28;
 				case 0x28 + 0x01: /* dp,dp */
 						data = cpu_read(dp + data, rel_time - 3);
 						goto case;
 				case 0x28 + 0x10: { /*dp,imm*/
-							const(ubyte) addr3 = ram[pc + 1];
-							pc += 2;
+							const(ubyte) addr3 = ram[cpuState.pc + 1];
+							cpuState.pc += 2;
 							addr = addr3 + dp;
 						}
 				addr_0x28:
@@ -1435,29 +1490,29 @@ private:
 					// LOGICAL_OP( 0x28, & ); // AND
 
 				case 0x08 - 0x02: /* (X) */
-					data = x + dp;
-					pc--;
+					data = cpuState.x + dp;
+					cpuState.pc--;
 					goto end_0x08;
 				case 0x08 + 0x0F: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 					goto end_0x08;
 				case 0x08 - 0x01: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x08;
 				case 0x08 + 0x0E: /* abs+Y */
-					data += y;
+					data += cpuState.y;
 					goto abs_0x08;
 				case 0x08 + 0x0D: /* abs+X */
-					data += x;
+					data += cpuState.x;
 					goto case;
 				case 0x08 - 0x03: /* abs */
 				abs_0x08:
-					++pc;
-					data += 0x100 * ram[pc];
+					++cpuState.pc;
+					data += 0x100 * ram[cpuState.pc];
 					goto end_0x08;
 				case 0x08 + 0x0C: /* dp+X */
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x08 - 0x04: /* dp */
 					data += dp;
@@ -1465,19 +1520,19 @@ private:
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0x08: /* imm */
-					nz = a |= data;
+					nz = cpuState.a |= data;
 					goto inc_pc_loop;
 					{
 				case 0x08 + 0x11: /* X,Y */
-						data = cpu_read(dp + y, rel_time - 2);
-						addr = x + dp;
+						data = cpu_read(dp + cpuState.y, rel_time - 2);
+						addr = cpuState.x + dp;
 						goto addr_0x08;
 				case 0x08 + 0x01: /* dp,dp */
 						data = cpu_read(dp + data, rel_time - 3);
 						goto case;
 				case 0x08 + 0x10: { /*dp,imm*/
-							const(ubyte) addr3 = ram[pc + 1];
-							pc += 2;
+							const(ubyte) addr3 = ram[cpuState.pc + 1];
+							cpuState.pc += 2;
 							addr = addr3 + dp;
 						}
 				addr_0x08:
@@ -1488,29 +1543,29 @@ private:
 					// LOGICAL_OP( 0x08, | ); // OR
 
 				case 0x48 - 0x02: /* (X) */
-					data = x + dp;
-					pc--;
+					data = cpuState.x + dp;
+					cpuState.pc--;
 					goto end_0x48;
 				case 0x48 + 0x0F: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 					goto end_0x48;
 				case 0x48 - 0x01: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x48;
 				case 0x48 + 0x0E: /* abs+Y */
-					data += y;
+					data += cpuState.y;
 					goto abs_0x48;
 				case 0x48 + 0x0D: /* abs+X */
-					data += x;
+					data += cpuState.x;
 					goto case;
 				case 0x48 - 0x03: /* abs */
 				abs_0x48:
-					++pc;
-					data += 0x100 * ram[pc];
+					++cpuState.pc;
+					data += 0x100 * ram[cpuState.pc];
 					goto end_0x48;
 				case 0x48 + 0x0C: /* dp+X */
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x48 - 0x04: /* dp */
 					data += dp;
@@ -1518,19 +1573,19 @@ private:
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0x48: /* imm */
-					nz = a ^= data;
+					nz = cpuState.a ^= data;
 					goto inc_pc_loop;
 					{
 				case 0x48 + 0x11: /* X,Y */
-						data = cpu_read(dp + y, rel_time - 2);
-						addr = x + dp;
+						data = cpu_read(dp + cpuState.y, rel_time - 2);
+						addr = cpuState.x + dp;
 						goto addr_0x48;
 				case 0x48 + 0x01: /* dp,dp */
 						data = cpu_read(dp + data, rel_time - 3);
 						goto case;
 				case 0x48 + 0x10: { /*dp,imm*/
-							const(ubyte) addr3 = ram[pc + 1];
-							pc += 2;
+							const(ubyte) addr3 = ram[cpuState.pc + 1];
+							cpuState.pc += 2;
 							addr = addr3 + dp;
 						}
 				addr_0x48:
@@ -1543,29 +1598,29 @@ private:
 					// 4. 8-BIT ARITHMETIC OPERATION COMMANDS
 
 				case 0x68 - 0x02: /* (X) */
-					data = x + dp;
-					pc--;
+					data = cpuState.x + dp;
+					cpuState.pc--;
 					goto end_0x68;
 				case 0x68 + 0x0F: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 					goto end_0x68;
 				case 0x68 - 0x01: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 					goto end_0x68;
 				case 0x68 + 0x0E: /* abs+Y */
-					data += y;
+					data += cpuState.y;
 					goto abs_0x68;
 				case 0x68 + 0x0D: /* abs+X */
-					data += x;
+					data += cpuState.x;
 					goto case;
 				case 0x68 - 0x03: /* abs */
 				abs_0x68:
-					++pc;
-					data += 0x100 * ram[pc];
+					++cpuState.pc;
+					data += 0x100 * ram[cpuState.pc];
 					goto end_0x68;
 				case 0x68 + 0x0C: /* dp+X */
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x68 - 0x04: /* dp */
 					data += dp;
@@ -1573,14 +1628,14 @@ private:
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0x68: // CMP imm
-					nz = a - data;
+					nz = cpuState.a - data;
 					c = ~nz;
 					nz &= 0xFF;
 					goto inc_pc_loop;
 
 				case 0x79: // CMP (X),(Y)
-					data = cpu_read(dp + y, rel_time - 2);
-					nz = cpu_read(dp + x, rel_time - 1) - data;
+					data = cpu_read(dp + cpuState.y, rel_time - 2);
+					nz = cpu_read(dp + cpuState.x, rel_time - 1) - data;
 					c = ~nz;
 					nz &= 0xFF;
 					break;
@@ -1589,8 +1644,8 @@ private:
 					data = cpu_read(dp + data, rel_time - 3);
 					goto case;
 				case 0x78: // CMP dp,imm
-					++pc;
-					nz = cpu_read(dp + ram[pc], rel_time - 1) - data;
+					++cpuState.pc;
+					nz = cpu_read(dp + ram[cpuState.pc], rel_time - 1) - data;
 					c = ~nz;
 					nz &= 0xFF;
 					goto inc_pc_loop;
@@ -1599,13 +1654,13 @@ private:
 					data += dp;
 					goto cmp_x_addr;
 				case 0x1E: // CMP X,abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc++;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc++;
 				cmp_x_addr:
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0xC8: // CMP X,imm
-					nz = x - data;
+					nz = cpuState.x - data;
 					c = ~nz;
 					nz &= 0xFF;
 					goto inc_pc_loop;
@@ -1614,13 +1669,13 @@ private:
 					data += dp;
 					goto cmp_y_addr;
 				case 0x5E: // CMP Y,abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc++;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc++;
 				cmp_y_addr:
 					data = cpu_read(data, rel_time);
 					goto case;
 				case 0xAD: // CMP Y,imm
-					nz = y - data;
+					nz = cpuState.y - data;
 					c = ~nz;
 					nz &= 0xFF;
 					goto inc_pc_loop;
@@ -1628,9 +1683,9 @@ private:
 					{
 				case 0xB9: // SBC (x),(y)
 				case 0x99: // ADC (x),(y)
-						pc--; // compensate for inc later
-						data = cpu_read(dp + y, rel_time - 2);
-						addr2 = x + dp;
+						cpuState.pc--; // compensate for inc later
+						data = cpu_read(dp + cpuState.y, rel_time - 2);
+						addr2 = cpuState.x + dp;
 						goto adc_addr;
 				case 0xA9: // SBC dp,dp
 				case 0x89: // ADC dp,dp
@@ -1638,8 +1693,8 @@ private:
 						goto case;
 				case 0xB8: // SBC dp,imm
 				case 0x98: // ADC dp,imm
-						++pc;
-						addr2 = ram[pc] + dp;
+						++cpuState.pc;
+						addr2 = ram[cpuState.pc] + dp;
 				adc_addr:
 						nz = cpu_read(addr2, rel_time - 1);
 						goto adc_data;
@@ -1647,35 +1702,35 @@ private:
 						// catch ADC and SBC together, then decode later based on operand
 				case 0x88 - 0x02:
 				case (0x88 - 0x02) + 0x20: /* (X) */
-						data = x + dp;
-						pc--;
+						data = cpuState.x + dp;
+						cpuState.pc--;
 						goto end_0x88;
 				case 0x88 + 0x0F:
 				case (0x88 + 0x0F) + 0x20: /* (dp)+Y */
-					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
+					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + cpuState.y;
 						goto end_0x88;
 				case 0x88 - 0x01:
 				case (0x88 - 0x01) + 0x20: /* (dp+X) */
-					const offset = cast(ubyte)(data + x) + dp;
+					const offset = cast(ubyte)(data + cpuState.x) + dp;
 					data = (cast(ushort[])((ram[offset .. offset + 2])))[0];
 						goto end_0x88;
 				case 0x88 + 0x0E:
 				case (0x88 + 0x0E) + 0x20: /* abs+Y */
-						data += y;
+						data += cpuState.y;
 						goto abs_0x88;
 				case 0x88 + 0x0D:
 				case (0x88 + 0x0D) + 0x20: /* abs+X */
-						data += x;
+						data += cpuState.x;
 						goto case;
 				case 0x88 - 0x03:
 				case (0x88 - 0x03) + 0x20: /* abs */
 				abs_0x88:
-						++pc;
-						data += 0x100 * ram[pc];
+						++cpuState.pc;
+						data += 0x100 * ram[cpuState.pc];
 						goto end_0x88;
 				case 0x88 + 0x0C:
 				case (0x88 + 0x0C) + 0x20: /* dp+X */
-						data = cast(ubyte)(data + x);
+						data = cast(ubyte)(data + cpuState.x);
 						goto case;
 				case 0x88 - 0x04:
 				case (0x88 - 0x04) + 0x20: /* dp */
@@ -1686,7 +1741,7 @@ private:
 				case 0xA8: // SBC imm
 				case 0x88: // ADC imm
 						addr2 = -1; // A
-						nz = a;
+						nz = cpuState.a;
 				adc_data: {
 							int flags;
 							if (opcode >= 0xA0) // SBC
@@ -1696,10 +1751,10 @@ private:
 							nz += data + (c >> 8 & 1);
 							flags ^= nz;
 
-							psw = (psw & ~(v40 | h08)) | (flags >> 1 & h08) | ((flags + 0x80) >> 2 & v40);
+							cpuState.psw = (cpuState.psw & ~(v40 | h08)) | (flags >> 1 & h08) | ((flags + 0x80) >> 2 & v40);
 							c = nz;
 							if (addr2 < 0) {
-								a = cast(ubyte) nz;
+								cpuState.a = cast(ubyte) nz;
 								goto inc_pc_loop;
 							}
 							cpu_write(nz, addr2, rel_time);
@@ -1711,40 +1766,40 @@ private:
 					// 6. ADDITION & SUBTRACTION COMMANDS
 
 				case 0xBC:
-					nz = a + 1;
-					a = cast(ubyte) nz;
+					nz = cpuState.a + 1;
+					cpuState.a = cast(ubyte) nz;
 					break;
 					// INC_DEC_REG( a, + 1 ) // INC A
 				case 0x3D:
-					nz = x + 1;
-					x = cast(ubyte) nz;
+					nz = cpuState.x + 1;
+					cpuState.x = cast(ubyte) nz;
 					break;
 					// INC_DEC_REG( x, + 1 ) // INC X
 				case 0xFC:
-					nz = y + 1;
-					y = cast(ubyte) nz;
+					nz = cpuState.y + 1;
+					cpuState.y = cast(ubyte) nz;
 					break;
 					// INC_DEC_REG( y, + 1 ) // INC Y
 
 				case 0x9C:
-					nz = a - 1;
-					a = cast(ubyte) nz;
+					nz = cpuState.a - 1;
+					cpuState.a = cast(ubyte) nz;
 					break;
 					// INC_DEC_REG( a, - 1 ) // DEC A
 				case 0x1D:
-					nz = x - 1;
-					x = cast(ubyte) nz;
+					nz = cpuState.x - 1;
+					cpuState.x = cast(ubyte) nz;
 					break;
 					// INC_DEC_REG( x, - 1 ) // DEC X
 				case 0xDC:
-					nz = y - 1;
-					y = cast(ubyte) nz;
+					nz = cpuState.y - 1;
+					cpuState.y = cast(ubyte) nz;
 					break;
 					// INC_DEC_REG( y, - 1 ) // DEC Y
 
 				case 0x9B: // DEC dp+X
 				case 0xBB: // INC dp+X
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x8B: // DEC dp
 				case 0xAB: // INC dp
@@ -1752,8 +1807,8 @@ private:
 					goto inc_abs;
 				case 0x8C: // DEC abs
 				case 0xAC: // INC abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc++;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc++;
 				inc_abs:
 					nz = (opcode >> 4 & 2) - 1;
 					nz += cpu_read(data, rel_time - 1);
@@ -1766,9 +1821,9 @@ private:
 					c = 0;
 					goto case;
 				case 0x7C: { // ROR A
-						nz = (c >> 1 & 0x80) | (a >> 1);
-						c = a << 8;
-						a = nz;
+						nz = (c >> 1 & 0x80) | (cpuState.a >> 1);
+						c = cpuState.a << 8;
+						cpuState.a = nz;
 						break;
 					}
 
@@ -1777,9 +1832,9 @@ private:
 					goto case;
 				case 0x3C: { // ROL A
 						temp = c >> 8 & 1;
-						c = a << 1;
+						c = cpuState.a << 1;
 						nz = c | temp;
-						a = cast(ubyte) nz;
+						cpuState.a = cast(ubyte) nz;
 						break;
 					}
 
@@ -1791,7 +1846,7 @@ private:
 					c = 0;
 					goto case;
 				case 0x3B: // ROL dp+X
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x2B: // ROL dp
 					data += dp;
@@ -1800,8 +1855,8 @@ private:
 					c = 0;
 					goto case;
 				case 0x2C: // ROL abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc++;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc++;
 				rol_mem:
 					nz = c >> 8 & 1;
 					nz |= (c = cpu_read(data, rel_time - 1) << 1);
@@ -1816,7 +1871,7 @@ private:
 					c = 0;
 					goto case;
 				case 0x7B: // ROR dp+X
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x6B: // ROR dp
 					data += dp;
@@ -1825,8 +1880,8 @@ private:
 					c = 0;
 					goto case;
 				case 0x6C: // ROR abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc++;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc++;
 				ror_mem: {
 						temp = cpu_read(data, rel_time - 1);
 						nz = (c >> 1 & 0x80) | (temp >> 1);
@@ -1836,21 +1891,21 @@ private:
 					}
 
 				case 0x9F: // XCN
-					nz = a = (a >> 4) | cast(ubyte)(a << 4);
+					nz = cpuState.a = (cpuState.a >> 4) | cast(ubyte)(cpuState.a << 4);
 					break;
 
 					// 8. 16-BIT TRANSMISION COMMANDS
 
 				case 0xBA: // MOVW YA,dp
-					a = cpu_read(dp + data, rel_time - 2);
-					nz = (a & 0x7F) | (a >> 1);
-					y = cpu_read(dp + cast(ubyte)(data + 1), rel_time);
-					nz |= y;
+					cpuState.a = cpu_read(dp + data, rel_time - 2);
+					nz = (cpuState.a & 0x7F) | (cpuState.a >> 1);
+					cpuState.y = cpu_read(dp + cast(ubyte)(data + 1), rel_time);
+					nz |= cpuState.y;
 					goto inc_pc_loop;
 
 				case 0xDA: // MOVW dp,YA
-					cpu_write(a, dp + data, rel_time - 1);
-					cpu_write(y + no_read_before_write, cast(ubyte)(data + 1), rel_time);
+					cpu_write(cpuState.a, dp + data, rel_time - 1);
+					cpu_write(cpuState.y + no_read_before_write, cast(ubyte)(data + 1), rel_time);
 					goto inc_pc_loop;
 
 					// 9. 16-BIT OPERATION COMMANDS
@@ -1886,24 +1941,24 @@ private:
 							hi ^= 0xFF;
 						}
 
-						lo += a;
-						result = y + hi + (lo >> 8);
-						flags = hi ^ y ^ result;
+						lo += cpuState.a;
+						result = cpuState.y + hi + (lo >> 8);
+						flags = hi ^ cpuState.y ^ result;
 
-						psw = (psw & ~(v40 | h08)) | (flags >> 1 & h08) | ((flags + 0x80) >> 2 & v40);
+						cpuState.psw = (cpuState.psw & ~(v40 | h08)) | (flags >> 1 & h08) | ((flags + 0x80) >> 2 & v40);
 						c = result;
-						a = cast(ubyte) lo;
+						cpuState.a = cast(ubyte) lo;
 						result = cast(ubyte) result;
-						y = result;
+						cpuState.y = result;
 						nz = (((lo >> 1) | lo) & 0x7F) | result;
 
 						goto inc_pc_loop;
 					}
 
 				case 0x5A: { // CMPW YA,dp
-						temp = a - cpu_read(dp + data, rel_time - 1);
+						temp = cpuState.a - cpu_read(dp + data, rel_time - 1);
 						nz = ((temp >> 1) | temp) & 0x7F;
-						temp = y + (temp >> 8);
+						temp = cpuState.y + (temp >> 8);
 						temp -= cpu_read(dp + cast(ubyte)(data + 1), rel_time);
 						nz |= temp;
 						c = ~temp;
@@ -1914,36 +1969,36 @@ private:
 					// 10. MULTIPLICATION & DIVISON COMMANDS
 
 				case 0xCF: { // MUL YA
-						uint temp2 = y * a;
-						a = cast(ubyte) temp2;
+						uint temp2 = cpuState.y * cpuState.a;
+						cpuState.a = cast(ubyte) temp2;
 						nz = ((temp2 >> 1) | temp2) & 0x7F;
-						y = temp2 >> 8;
-						nz |= y;
+						cpuState.y = temp2 >> 8;
+						nz |= cpuState.y;
 						break;
 					}
 
 				case 0x9E: // DIV YA,X
 				{
-						uint ya = y * 0x100 + a;
+						uint ya = cpuState.y * 0x100 + cpuState.a;
 
-						psw &= ~(h08 | v40);
+						cpuState.psw &= ~(h08 | v40);
 
-						if (y >= x)
-							psw |= v40;
+						if (cpuState.y >= cpuState.x)
+							cpuState.psw |= v40;
 
-						if ((y & 15) >= (x & 15))
-							psw |= h08;
+						if ((cpuState.y & 15) >= (cpuState.x & 15))
+							cpuState.psw |= h08;
 
-						if (y < x * 2) {
-							a = ya / x;
-							y = ya - a * x;
+						if (cpuState.y < cpuState.x * 2) {
+							cpuState.a = ya / cpuState.x;
+							cpuState.y = ya - cpuState.a * cpuState.x;
 						} else {
-							a = 255 - (ya - x * 0x200) / (256 - x);
-							y = x + (ya - x * 0x200) % (256 - x);
+							cpuState.a = 255 - (ya - cpuState.x * 0x200) / (256 - cpuState.x);
+							cpuState.y = cpuState.x + (ya - cpuState.x * 0x200) % (256 - cpuState.x);
 						}
 
-						nz = cast(ubyte) a;
-						a = cast(ubyte) a;
+						nz = cast(ubyte) cpuState.a;
+						cpuState.a = cast(ubyte) cpuState.a;
 
 						break;
 					}
@@ -1952,45 +2007,45 @@ private:
 
 				case 0xDF: // DAA
 					dprintf("SPC: suspicious opcode: DAA\n");
-					if (a > 0x99 || c & 0x100) {
-						a += 0x60;
+					if (cpuState.a > 0x99 || c & 0x100) {
+						cpuState.a += 0x60;
 						c = 0x100;
 					}
 
-					if ((a & 0x0F) > 9 || psw & h08)
-						a += 0x06;
+					if ((cpuState.a & 0x0F) > 9 || cpuState.psw & h08)
+						cpuState.a += 0x06;
 
-					nz = a;
-					a = cast(ubyte) a;
+					nz = cpuState.a;
+					cpuState.a = cast(ubyte) cpuState.a;
 					break;
 
 				case 0xBE: // DAS
 					dprintf("SPC: suspicious opcode: DAS\n");
-					if (a > 0x99 || !(c & 0x100)) {
-						a -= 0x60;
+					if (cpuState.a > 0x99 || !(c & 0x100)) {
+						cpuState.a -= 0x60;
 						c = 0;
 					}
 
-					if ((a & 0x0F) > 9 || !(psw & h08))
-						a -= 0x06;
+					if ((cpuState.a & 0x0F) > 9 || !(cpuState.psw & h08))
+						cpuState.a -= 0x06;
 
-					nz = a;
-					a = cast(ubyte) a;
+					nz = cpuState.a;
+					cpuState.a = cast(ubyte) cpuState.a;
 					break;
 
 					// 12. BRANCHING COMMANDS
 
 				case 0x2F: // BRA rel
-					pc += cast(byte) data;
+					cpuState.pc += cast(byte) data;
 					goto inc_pc_loop;
 
 				case 0x30: // BMI
 				{
-						pc++;
-						pc += cast(byte) data;
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
 						if (nz & nz_neg_mask)
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -1998,11 +2053,11 @@ private:
 
 				case 0x10: // BPL
 				{
-						pc++;
-						pc += cast(byte) data;
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
 						if (!(nz & nz_neg_mask))
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -2010,11 +2065,11 @@ private:
 
 				case 0xB0: // BCS
 				{
-						pc++;
-						pc += cast(byte) data;
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
 						if (c & 0x100)
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -2022,11 +2077,11 @@ private:
 
 				case 0x90: // BCC
 				{
-						pc++;
-						pc += cast(byte) data;
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
 						if (!(c & 0x100))
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -2034,11 +2089,11 @@ private:
 
 				case 0x70: // BVS
 				{
-						pc++;
-						pc += cast(byte) data;
-						if (psw & v40)
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
+						if (cpuState.psw & v40)
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -2046,11 +2101,11 @@ private:
 
 				case 0x50: // BVC
 				{
-						pc++;
-						pc += cast(byte) data;
-						if (!(psw & v40))
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
+						if (!(cpuState.psw & v40))
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
@@ -2064,7 +2119,7 @@ private:
 				case 0xA3:
 				case 0xC3:
 				case 0xE3: {
-						pc++;
+						cpuState.pc++;
 						if (cpu_read(dp + data, rel_time - 4) >> (opcode >> 5) & 1)
 							goto cbranch_taken_loop;
 						rel_time -= 2;
@@ -2080,7 +2135,7 @@ private:
 				case 0xB3:
 				case 0xD3:
 				case 0xF3: {
-						pc++;
+						cpuState.pc++;
 						if (!(cpu_read(dp + data, rel_time - 4) >> (opcode >> 5) & 1))
 							goto cbranch_taken_loop;
 						rel_time -= 2;
@@ -2089,7 +2144,7 @@ private:
 					// CBRANCH( !(cpu_read ( dp + data, rel_time - 4 ) >> (opcode >> 5) & 1) )
 
 				case 0xDE: // CBNE dp+X,rel
-					data = cast(ubyte)(data + x);
+					data = cast(ubyte)(data + cpuState.x);
 					goto case;
 				case 0x2E: { // CBNE dp,rel
 						// int temp;
@@ -2098,8 +2153,8 @@ private:
 							temp = cpu_read(dp + data, rel_time - 4);
 						}
 						{
-							pc++;
-							if (temp != a)
+							cpuState.pc++;
+							if (temp != cpuState.a)
 								goto cbranch_taken_loop;
 							rel_time -= 2;
 							goto inc_pc_loop;
@@ -2111,7 +2166,7 @@ private:
 						uint temp2 = cpu_read(dp + data, rel_time - 4) - 1;
 						cpu_write(temp2 + no_read_before_write, dp + cast(ubyte) data, rel_time - 3);
 						{
-							pc++;
+							cpuState.pc++;
 							if (temp2)
 								goto cbranch_taken_loop;
 							rel_time -= 2;
@@ -2121,73 +2176,73 @@ private:
 					}
 
 				case 0xFE: // DBNZ Y,rel
-					y = cast(ubyte)(y - 1);
+					cpuState.y = cast(ubyte)(cpuState.y - 1);
 					{
-						pc++;
-						pc += cast(byte) data;
-						if (y)
+						cpuState.pc++;
+						cpuState.pc += cast(byte) data;
+						if (cpuState.y)
 							break;
-						pc -= cast(byte) data;
+						cpuState.pc -= cast(byte) data;
 						rel_time -= 2;
 						break;
 					}
 					// BRANCH( y )
 
 				case 0x1F: // JMP [abs+X]
-					pc = cast(ushort)((cast(const(ushort)[])(ram[pc .. pc + 2]))[0] + x);
+					cpuState.pc = cast(ushort)((cast(const(ushort)[])(ram[cpuState.pc .. cpuState.pc + 2]))[0] + cpuState.x);
 					goto case;
 				case 0x5F: // JMP abs
-					pc = ((cast(const(ushort)[])(ram[pc .. pc + 2]))[0]);
+					cpuState.pc = ((cast(const(ushort)[])(ram[cpuState.pc .. cpuState.pc + 2]))[0]);
 					break;
 
 					// 13. SUB-ROUTINE CALL RETURN COMMANDS
 
 				case 0x0F: { // BRK
 						// int temp;
-						int ret_addr = cast(int)(pc);
+						int ret_addr = cast(int)(cpuState.pc);
 						dprintf("SPC: suspicious opcode: BRK\n");
-						pc = (cast(ushort[])(ram[0xFFDE .. 0xFFE0]))[0]; // vector address verified
+						cpuState.pc = (cast(ushort[])(ram[0xFFDE .. 0xFFE0]))[0]; // vector address verified
 						{ // PUSH16( ret_addr );
-							sp -= 2;
-							addr2 = cast(int)(sp);
+							cpuState.sp -= 2;
+							addr2 = cast(int)(cpuState.sp);
 							if (addr2 > 0x100) {
-								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) ret_addr;
+								(cast(ushort[])(ram[cpuState.sp .. cpuState.sp + 2]))[0] = cast(ushort) ret_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) ret_addr;
-								ram[sp + 1] = cast(ubyte)(ret_addr >> 8);
-								sp += 0x100;
+								ram[cpuState.sp + 1] = cast(ubyte)(ret_addr >> 8);
+								cpuState.sp += 0x100;
 							}
 						}
 
 						{
-							temp = psw & ~(n80 | p20 | z02 | c01);
+							temp = cpuState.psw & ~(n80 | p20 | z02 | c01);
 							temp |= c >> 8 & c01;
 							temp |= dp >> 3 & p20;
 							temp |= ((nz >> 4) | nz) & n80;
 							if (!cast(ubyte) nz)
 								temp |= z02;
 						}
-						psw = (psw | b10) & ~i04;
+						cpuState.psw = (cpuState.psw | b10) & ~i04;
 						{ // PUSH( temp );
-							--sp;
-							ram[sp] = cast(ubyte)(temp);
-							if (sp == 0x100)
-								sp += 0x100;
+							--cpuState.sp;
+							ram[cpuState.sp] = cast(ubyte)(temp);
+							if (cpuState.sp == 0x100)
+								cpuState.sp += 0x100;
 						}
 						break;
 					}
 
 				case 0x4F: { // PCALL offset
-						int ret_addr = cast(int)(pc + 1);
-						(pc = cast(ushort)(0xFF00 | data));
+						int ret_addr = cast(int)(cpuState.pc + 1);
+						(cpuState.pc = cast(ushort)(0xFF00 | data));
 						{ //PUSH16(ret_addr)
-							addr2 = cast(int)((sp -= 2));
+							addr2 = cast(int)((cpuState.sp -= 2));
 							if (addr2 > 0x100) {
-								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) ret_addr;
+								(cast(ushort[])(ram[cpuState.sp .. cpuState.sp + 2]))[0] = cast(ushort) ret_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) ret_addr;
-								ram[sp + 1] = cast(ubyte)(ret_addr >> 8);
-								sp += 0x100;
+								ram[cpuState.sp + 1] = cast(ubyte)(ret_addr >> 8);
+								cpuState.sp += 0x100;
 							}
 						}
 						break;
@@ -2209,16 +2264,16 @@ private:
 				case 0xD1:
 				case 0xE1:
 				case 0xF1: {
-						int ret_addr = cast(int)(pc);
-						pc = (cast(ushort[])(ram[0xFFDE - (opcode >> 3) .. 0xFFE0 - (opcode >> 3)]))[0];
+						int ret_addr = cast(int)(cpuState.pc);
+						cpuState.pc = (cast(ushort[])(ram[0xFFDE - (opcode >> 3) .. 0xFFE0 - (opcode >> 3)]))[0];
 						{ //PUSH16( ret_addr );
-							addr2 = cast(int)((sp -= 2));
+							addr2 = cast(int)((cpuState.sp -= 2));
 							if (addr2 > 0x100) {
-								(cast(ushort[])(ram[sp .. sp + 2]))[0] = cast(ushort) ret_addr;
+								(cast(ushort[])(ram[cpuState.sp .. cpuState.sp + 2]))[0] = cast(ushort) ret_addr;
 							} else {
 								ram[cast(ubyte) addr2 + 0x100] = cast(ubyte) ret_addr;
-								ram[sp + 1] = cast(ubyte)(ret_addr >> 8);
-								sp += 0x100;
+								ram[cpuState.sp + 1] = cast(ubyte)(ret_addr >> 8);
+								cpuState.sp += 0x100;
 							}
 						}
 						break;
@@ -2229,21 +2284,21 @@ private:
 					{
 						// int temp;
 				case 0x7F: // RET1
-						temp = ram[sp];
-						pc = (cast(ushort[])(ram[sp + 1 .. sp + 3]))[0];
-						sp += 3;
+						temp = ram[cpuState.sp];
+						cpuState.pc = (cast(ushort[])(ram[cpuState.sp + 1 .. cpuState.sp + 3]))[0];
+						cpuState.sp += 3;
 						goto set_psw;
 				case 0x8E: // POP PSW
 				{ // POP( temp );
-							temp = ram[sp];
-							sp++;
-							if (sp == 0x201) {
-								temp = ram[sp -0x101];
-								sp -= 0x100;
+							temp = ram[cpuState.sp];
+							cpuState.sp++;
+							if (cpuState.sp == 0x201) {
+								temp = ram[cpuState.sp -0x101];
+								cpuState.sp -= 0x100;
 							}
 						}
 				set_psw: {
-							psw = temp;
+							cpuState.psw = cast(ubyte)temp;
 							c = temp << 8;
 							dp = temp << 3 & 0x100;
 							nz = (temp << 4 & 0x800) | (~temp & z02);
@@ -2254,7 +2309,7 @@ private:
 				case 0x0D: { // PUSH PSW
 						// int temp;
 						{
-							temp = psw & ~(n80 | p20 | z02 | c01);
+							temp = cpuState.psw & ~(n80 | p20 | z02 | c01);
 							temp |= c >> 8 & c01;
 							temp |= dp >> 3 & p20;
 							temp |= ((nz >> 4) | nz) & n80;
@@ -2262,70 +2317,70 @@ private:
 								temp |= z02;
 						}
 						{ // PUSH( temp );
-							--sp;
-							ram[sp] = cast(ubyte)(temp);
-							if (sp == 0x100)
-								sp += 0x100;
+							--cpuState.sp;
+							ram[cpuState.sp] = cast(ubyte)(temp);
+							if (cpuState.sp == 0x100)
+								cpuState.sp += 0x100;
 						}
 						break;
 					}
 
 				case 0x2D: // PUSH A
 				{ // PUSH( a );
-						--sp;
-						ram[sp] = cast(ubyte)(a);
-						if (sp == 0x100)
-							sp += 0x100;
+						--cpuState.sp;
+						ram[cpuState.sp] = cast(ubyte)(cpuState.a);
+						if (cpuState.sp == 0x100)
+							cpuState.sp += 0x100;
 					}
 					break;
 
 				case 0x4D: // PUSH X
 				{ // PUSH( x );
-						--sp;
-						ram[sp] = cast(ubyte)(x);
-						if (sp == 0x100)
-							sp += 0x100;
+						--cpuState.sp;
+						ram[cpuState.sp] = cast(ubyte)(cpuState.x);
+						if (cpuState.sp == 0x100)
+							cpuState.sp += 0x100;
 					}
 					break;
 
 				case 0x6D: // PUSH Y
 				{ // PUSH( y );
-						--sp;
-						ram[sp] = cast(ubyte)(y);
-						if (sp == 0x100)
-							sp += 0x100;
+						--cpuState.sp;
+						ram[cpuState.sp] = cast(ubyte)(cpuState.y);
+						if (cpuState.sp == 0x100)
+							cpuState.sp += 0x100;
 					}
 					break;
 
 				case 0xAE: // POP A
 				{ // POP( a );
-						a = ram[sp];
-						sp++;
-						if (sp == 0x201) {
-							a = ram[sp -0x101];
-							sp -= 0x100;
+						cpuState.a = ram[cpuState.sp];
+						cpuState.sp++;
+						if (cpuState.sp == 0x201) {
+							cpuState.a = ram[cpuState.sp -0x101];
+							cpuState.sp -= 0x100;
 						}
 					}
 					break;
 
 				case 0xCE: // POP X
 				{ // POP( x );
-						x = ram[sp];
-						sp++;
-						if (sp == 0x201) {
-							x = ram[sp -0x101];
-							sp -= 0x100;
+						cpuState.x = ram[cpuState.sp];
+						cpuState.sp++;
+						if (cpuState.sp == 0x201) {
+							cpuState.x = ram[cpuState.sp -0x101];
+							cpuState.sp -= 0x100;
 						}
 					}
 					break;
 
 				case 0xEE: // POP Y
 				{ // POP( y );
-						y = ram[sp];
-						sp++;
-						if (sp == 0x201) {
-							y = ram[sp -0x101];
-							sp -= 0x100;
+						cpuState.y = ram[cpuState.sp];
+						cpuState.sp++;
+						if (cpuState.sp == 0x201) {
+							cpuState.y = ram[cpuState.sp -0x101];
+							cpuState.sp -= 0x100;
 						}
 					}
 					break;
@@ -2359,46 +2414,46 @@ private:
 
 				case 0x0E: // TSET1 abs
 				case 0x4E: // TCLR1 abs
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc += 2;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc += 2;
 					{
 						uint temp2 = cpu_read(data, rel_time - 2);
-						nz = cast(ubyte)(a - temp2);
-						temp2 &= ~a;
+						nz = cast(ubyte)(cpuState.a - temp2);
+						temp2 &= ~cpuState.a;
 						if (opcode == 0x0E)
-							temp2 |= a;
+							temp2 |= cpuState.a;
 						cpu_write(temp2, data, rel_time);
 					}
 					break;
 
 				case 0x4A: // AND1 C,mem.bit
-					c &= CPU_mem_bit(ram[pc .. pc + 2], rel_time + 0);
-					pc += 2;
+					c &= CPU_mem_bit(ram[cpuState.pc .. cpuState.pc + 2], rel_time + 0);
+					cpuState.pc += 2;
 					break;
 
 				case 0x6A: // AND1 C,/mem.bit
-					c &= ~CPU_mem_bit(ram[pc .. pc + 2], rel_time + 0);
-					pc += 2;
+					c &= ~CPU_mem_bit(ram[cpuState.pc .. cpuState.pc + 2], rel_time + 0);
+					cpuState.pc += 2;
 					break;
 
 				case 0x0A: // OR1 C,mem.bit
-					c |= CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
-					pc += 2;
+					c |= CPU_mem_bit(ram[cpuState.pc .. cpuState.pc + 2], rel_time - 1);
+					cpuState.pc += 2;
 					break;
 
 				case 0x2A: // OR1 C,/mem.bit
-					c |= ~CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
-					pc += 2;
+					c |= ~CPU_mem_bit(ram[cpuState.pc .. cpuState.pc + 2], rel_time - 1);
+					cpuState.pc += 2;
 					break;
 
 				case 0x8A: // EOR1 C,mem.bit
-					c ^= CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
-					pc += 2;
+					c ^= CPU_mem_bit(ram[cpuState.pc .. cpuState.pc + 2], rel_time - 1);
+					cpuState.pc += 2;
 					break;
 
 				case 0xEA: // NOT1 mem.bit
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc += 2;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc += 2;
 					{
 						uint temp2 = cpu_read(data & 0x1FFF, rel_time - 1);
 						temp2 ^= 1 << (data >> 13);
@@ -2407,8 +2462,8 @@ private:
 					break;
 
 				case 0xCA: // MOV1 mem.bit,C
-					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
-					pc += 2;
+					data = (cast(ushort[])(ram[cpuState.pc .. cpuState.pc + 2]))[0];
+					cpuState.pc += 2;
 					{
 						uint temp2 = cpu_read(data & 0x1FFF, rel_time - 2);
 						uint bit = data >> 13;
@@ -2418,8 +2473,8 @@ private:
 					break;
 
 				case 0xAA: // MOV1 C,mem.bit
-					c = CPU_mem_bit(ram[pc .. pc + 2], rel_time);
-					pc += 2;
+					c = CPU_mem_bit(ram[cpuState.pc .. cpuState.pc + 2], rel_time);
+					cpuState.pc += 2;
 					break;
 
 					// 16. PROGRAM PSW FLAG OPERATION COMMANDS
@@ -2437,7 +2492,7 @@ private:
 					break;
 
 				case 0xE0: // CLRV
-					psw &= ~(v40 | h08);
+					cpuState.psw &= ~(v40 | h08);
 					break;
 
 				case 0x20: // CLRP
@@ -2450,12 +2505,12 @@ private:
 
 				case 0xA0: // EI
 					dprintf("SPC: suspicious opcode: EI\n");
-					psw |= i04;
+					cpuState.psw |= i04;
 					break;
 
 				case 0xC0: // DI
 					dprintf("SPC: suspicious opcode: DI\n");
-					psw &= ~i04;
+					cpuState.psw &= ~i04;
 					break;
 
 					// 17. OTHER COMMANDS
@@ -2465,10 +2520,10 @@ private:
 
 				case 0xFF: { // STOP
 						// handle PC wrap-around
-						addr = cast(uint)(pc - 1);
+						addr = cast(uint)(cpuState.pc - 1);
 						if (addr >= 0x10000) {
 							addr &= 0xFFFF;
-							pc = cast(ushort)addr;
+							cpuState.pc = cast(ushort)addr;
 							dprintf("SPC: PC wrapped around\n");
 							break;
 						}
@@ -2476,7 +2531,7 @@ private:
 					goto case;
 				case 0xEF: // SLEEP
 					dprintf("SPC: suspicious opcode: STOP/SLEEP\n");
-					--pc;
+					--cpuState.pc;
 					rel_time = 0;
 					m.cpu_error = "SPC emulation error";
 					goto stop;
@@ -2484,21 +2539,21 @@ private:
 					assert(0); // catch any unhandled instructions
 				}
 			}
-			rel_time -= m.cycle_table[ram[pc]]; // undo partial execution of opcode
+			rel_time -= m.cycle_table[ram[cpuState.pc]]; // undo partial execution of opcode
 		stop:
 
 			// Uncache registers
-			if (pc >= 0x10000)
+			if (cpuState.pc >= 0x10000)
 				dprintf("SPC: PC wrapped around\n");
-			m.cpu_regs.pc = cast(ushort)(pc);
-			m.cpu_regs.sp = cast(ubyte)(sp - 0x101);
-			m.cpu_regs.a = cast(ubyte) a;
-			m.cpu_regs.x = cast(ubyte) x;
-			m.cpu_regs.y = cast(ubyte) y;
+			m.cpu_regs.pc = cast(ushort)(cpuState.pc);
+			m.cpu_regs.sp = cast(ubyte)(cpuState.sp - 0x101);
+			m.cpu_regs.a = cast(ubyte) cpuState.a;
+			m.cpu_regs.x = cast(ubyte) cpuState.x;
+			m.cpu_regs.y = cast(ubyte) cpuState.y;
 			{
 				int temp;
 				{
-					temp = psw & ~(n80 | p20 | z02 | c01);
+					temp = cpuState.psw & ~(n80 | p20 | z02 | c01);
 					temp |= c >> 8 & c01;
 					temp |= dp >> 3 & p20;
 					temp |= ((nz >> 4) | nz) & n80;
