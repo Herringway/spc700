@@ -377,7 +377,7 @@ public:
 		m.cpu_regs.sp = 0xEF;
 
 		// RAM and registers
-		m.ram.ram[] = data;
+		m.ram.ram[0 .. data.length] = data;
 		m.ram.ram[2 .. 0x100] = 0;
 		(cast(ushort[])m.ram.ram[0 .. 2])[0] = start;
 		m.ram.ram[0xF2] = 0x2C;
