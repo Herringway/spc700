@@ -56,8 +56,7 @@ public:
 			c[$ - 1].sum = sum;
 			io = io[1 .. $];
 			c = c[0 .. $ - 1];
-		}
-		while (c.length > 0);
+		} while (c.length > 0);
 	}
 
 	// Optional features
