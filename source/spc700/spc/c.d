@@ -47,30 +47,30 @@ enum spc_sample_rate = 32000;
 /* Sets IPL ROM data. Library does not include ROM data. Most SPC music files
 don't need ROM, but a full emulator must provide this. */
 enum spc_rom_size = 0x40;
-void spc_init_rom(SNES_SPC* s, const(ubyte)[64] r) {
+void spc_init_rom(scope SNES_SPC* s, const(ubyte)[64] r) @safe {
 	s.init_rom(r);
 }
 
 /* Sets destination for output samples */
 alias spc_sample_t = short;
-void spc_set_output(SNES_SPC* s, spc_sample_t* p, int n) {
+void spc_set_output(scope SNES_SPC* s, spc_sample_t* p, int n) @system {
 	s.set_output(p[0 .. n]);
 }
 
 /* Number of samples written to output since last set */
-int spc_sample_count(const(SNES_SPC)* s) {
+int spc_sample_count(scope const(SNES_SPC)* s) @safe {
 	return s.sample_count();
 }
 
 /* Resets SPC to power-on state. This resets your output buffer, so you must
 call spc_set_output() after this. */
-void spc_reset(SNES_SPC* s) {
+void spc_reset(scope SNES_SPC* s) @safe {
 	s.reset();
 }
 
 /* Emulates pressing reset switch on SNES. This resets your output buffer, so
 you must call spc_set_output() after this. */
-void spc_soft_reset(SNES_SPC* s) {
+void spc_soft_reset(scope SNES_SPC* s) @safe {
 	s.soft_reset();
 }
 
@@ -81,16 +81,16 @@ enum spc_clocks_per_sample = 32;
 
 /* Reads/writes port at specified time */
 enum spc_port_count = 4;
-int spc_read_port(SNES_SPC* s, spc_time_t t, int p) {
+int spc_read_port(scope SNES_SPC* s, spc_time_t t, int p) @safe {
 	return s.read_port(t, p);
 }
 
-void spc_write_port(SNES_SPC* s, spc_time_t t, int p, int d) {
+void spc_write_port(scope SNES_SPC* s, spc_time_t t, int p, int d) @safe {
 	s.write_port(t, p, d);
 }
 
 /* Runs SPC to end_time and starts a new time frame at 0 */
-void spc_end_frame(SNES_SPC* s, spc_time_t t) {
+void spc_end_frame(scope SNES_SPC* s, spc_time_t t) @safe {
 	s.end_frame(t);
 }
 
@@ -98,42 +98,42 @@ void spc_end_frame(SNES_SPC* s, spc_time_t t) {
 
 /*Mutes voices corresponding to non-zero bits in mask. Reduces emulation accuracy. */
 enum spc_voice_count = 8;
-void spc_mute_voices(SNES_SPC* s, int mask) {
+void spc_mute_voices(scope SNES_SPC* s, int mask) @safe {
 	s.mute_voices(mask);
 }
 
 /* If true, prevents channels and global volumes from being phase-negated.
 Only supported by fast DSP; has no effect on accurate DSP. */
-void spc_disable_surround(SNES_SPC* s, bool disable) {
+void spc_disable_surround(scope SNES_SPC* s, bool disable) @safe {
 	s.disable_surround(disable);
 }
 
 /* Sets tempo, where spc_tempo_unit = normal, spc_tempo_unit / 2 = half speed, etc. */
 enum spc_tempo_unit = 0x100;
-void spc_set_tempo(SNES_SPC* s, int tempo) {
+void spc_set_tempo(scope SNES_SPC* s, int tempo) @safe {
 	s.set_tempo(tempo);
 }
 
 /**** SPC music playback *****/
 
 /* Loads SPC data into emulator. Returns NULL on success, otherwise error string. */
-const(char*) spc_load_spc(SNES_SPC* s, const(void)* p, long n) {
+const(char*) spc_load_spc(scope SNES_SPC* s, const(void)* p, long n) @system {
 	return s.load_spc(p[0 .. cast(size_t)n]);
 }
 
 /* Clears echo region. Useful after loading an SPC as many have garbage in echo. */
-void spc_clear_echo(SNES_SPC* s) {
+void spc_clear_echo(scope SNES_SPC* s) @safe {
 	s.clear_echo();
 }
 
 /* Plays for count samples and write samples to out. Discards samples if out
 is NULL. Count must be a multiple of 2 since output is stereo. */
-const(char*) spc_play(SNES_SPC* s, int count, short* out_) {
+const(char*) spc_play(scope SNES_SPC* s, int count, short* out_) @system {
 	return s.play(out_[0 .. count]).ptr;
 }
 
 /* Skips count samples. Several times faster than spc_play(). */
-const(char*) spc_skip(SNES_SPC* s, int count) {
+const(char*) spc_skip(scope SNES_SPC* s, int count) @system {
 	return s.skip(count).ptr;
 }
 
@@ -142,22 +142,22 @@ const(char*) spc_skip(SNES_SPC* s, int count) {
 /* Saves/loads exact emulator state */
 enum spc_state_size = 67 * 1024L; /* maximum space needed when saving */
 alias spc_copy_func_t = void function(ubyte** io, scope void* state, size_t) @safe nothrow;
-void spc_copy_state(SNES_SPC* s, ubyte** p, spc_copy_func_t f) {
+void spc_copy_state(scope SNES_SPC* s, ubyte** p, spc_copy_func_t f) @safe {
 	SPC_DSP.copy_func_t dg = (ubyte** io, scope void[] state) { f(io, &state[0], state.length); };
 	s.copy_state(p, dg);
 }
 /* Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
 Does not set up SPC header; use spc_init_header() for that. */
-void spc_save_spc(SNES_SPC* s, void* spc_out) {
+void spc_save_spc(scope SNES_SPC* s, void* spc_out) @system {
 	s.save_spc((cast(ubyte*)spc_out)[0 .. spc_file_size]);
 }
 /* Returns non-zero if new key-on events occurred since last check. Useful for
 trimming silence while saving an SPC. */
-int spc_check_kon(SNES_SPC* s) {
+int spc_check_kon(scope SNES_SPC* s) @safe {
 	return s.check_kon();
 }
 /* Writes minimal SPC file header to spc_out */
-void spc_init_header(void* spc_out) {
+void spc_init_header(void* spc_out) @system {
 	SNES_SPC.init_header((cast(ubyte*)spc_out)[0 .. spc_file_size]);
 }
 
@@ -167,31 +167,29 @@ void spc_init_header(void* spc_out) {
 /**** SPC_Filter ****/
 
 /* Creates new filter. NULL if out of memory. */
-SPC_Filter* spc_filter_new() {
-	auto filter = cast(SPC_Filter*) malloc(SPC_Filter.sizeof);
-	emplace(filter);
-	return filter;
+SPC_Filter* spc_filter_new() @system {
+	return manualAlloc!SPC_Filter();
 }
 
 /* Frees filter */
-void spc_filter_delete(SPC_Filter* f) {
-	free(f);
+void spc_filter_delete(SPC_Filter* f) @system {
+	return manualFree(f);
 }
 
 /* Filters count samples of stereo sound in place. Count must be a multiple of 2. */
-void spc_filter_run(SPC_Filter* f, spc_sample_t* io, int count) {
+void spc_filter_run(SPC_Filter* f, spc_sample_t* io, int count) @system {
 	f.run(io[0 .. count]);
 }
 
 /* Clears filter to silence */
-void spc_filter_clear(SPC_Filter* f) {
+void spc_filter_clear(scope SPC_Filter* f) @safe {
 	f.clear();
 }
 
 /* Sets gain (volume), where spc_filter_gain_unit is normal. Gains greater than
 spc_filter_gain_unit are fine, since output is clamped to 16-bit sample range. */
 enum spc_filter_gain_unit = 0x100;
-void spc_filter_set_gain(SPC_Filter* f, int gain) {
+void spc_filter_set_gain(scope SPC_Filter* f, int gain) @safe {
 	f.gain = gain;
 }
 
@@ -199,6 +197,6 @@ void spc_filter_set_gain(SPC_Filter* f, int gain) {
 enum spc_filter_bass_none = 0;
 enum spc_filter_bass_norm = 8; /* normal amount */
 enum spc_filter_bass_max = 31;
-void spc_filter_set_bass(SPC_Filter* f, int bass) {
+void spc_filter_set_bass(scope SPC_Filter* f, int bass) @safe {
 	f.bass = bass;
 }
