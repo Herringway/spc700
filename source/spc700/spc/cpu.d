@@ -1043,7 +1043,7 @@ private:
 			pc += cast(byte)ram[pc];
 		inc_pc_loop:
 			pc++;
-		loop: {
+		loop: while (true) {
 				uint opcode;
 				uint data;
 
@@ -1053,7 +1053,7 @@ private:
 
 				opcode = ram[pc];
 				if ((rel_time += m.cycle_table[opcode]) > 0)
-					goto out_of_time;
+					break;
 
 				static if (is(SPC_CPU_OPCODE_HOOK)) {
 					SPC_CPU_OPCODE_HOOK(pc, opcode);
@@ -1088,10 +1088,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (!cast(ubyte) nz)
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( !(ubyte) nz ) // 89% taken
 
@@ -1100,10 +1100,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (cast(ubyte) nz)
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( (ubyte) nz )
 
@@ -1120,7 +1120,7 @@ private:
 								sp += 0x100;
 							}
 						}
-						goto loop;
+						break;
 					}
 
 				case 0x6F: // RET
@@ -1128,11 +1128,11 @@ private:
 					pc = (cast(ushort[])(ram[sp .. sp + 2]))[0];
 					sp += 2;
 					if (addr2 < 0x1FF)
-						goto loop;
+						break;
 
 					(pc = (ram[sp -0x101] * 0x100 + ram[cast(ubyte) addr2 + 0x100]));
 					sp -= 0x100;
-					goto loop;
+					break;
 
 				case 0xE4: // MOV a,dp
 					++pc;
@@ -1140,7 +1140,7 @@ private:
 					{
 						a = nz = cpu_read(dp + data, rel_time);
 					}
-					goto loop;
+					break;
 
 				case 0xFA: { // MOV dp,dp
 					{
@@ -1169,7 +1169,7 @@ private:
 									cpu_write_smp_reg(data, rel_time, i);
 							}
 						}
-						goto loop;
+						break;
 					}
 
 				case 0xC4: // MOV dp,a
@@ -1191,14 +1191,14 @@ private:
 								cpu_write_smp_reg_(a, rel_time, i);
 						}
 					}
-					goto loop;
+					break;
 
 					// 1. 8-bit Data Transmission Commands. Group I
 
 				case 0xE8 - 0x02: /* (X) */
 					data = x + dp;
-					pc--;
-					goto end_0xE8;
+					a = nz = cpu_read(data, rel_time);
+					break;
 				case 0xE8 + 0x0F: /* (dp)+Y */
 					data = (cast(ushort[])((ram[data + dp .. data + dp + 2])))[0] + y;
 					goto end_0xE8;
@@ -1208,10 +1208,10 @@ private:
 					goto end_0xE8;
 				case 0xE8 + 0x0E: /* abs+Y */
 					data += y;
-					goto abs_0xE8;
+					goto case 0xE8 - 0x03;
 				case 0xE8 + 0x0D: /* abs+X */
 					data += x;
-					goto case;
+					goto case 0xE8 - 0x03;
 				case 0xE8 - 0x03: /* abs */
 				abs_0xE8:
 					++pc;
@@ -1222,19 +1222,21 @@ private:
 					data += dp;
 				end_0xE8: // MOV A,addr
 					a = nz = cpu_read(data, rel_time);
-					goto inc_pc_loop;
+					pc++;
+					break;
 
 				case 0xBF: { // MOV A,(X)+
 						temp = x + dp;
 						x = cast(ubyte)(x + 1);
 						a = nz = cpu_read(temp, rel_time - 1);
-						goto loop;
+						break;
 					}
 
 				case 0xE8: // MOV A,imm
 					a = data;
 					nz = data;
-					goto inc_pc_loop;
+					pc++;
+					break;
 
 				case 0xF9: // MOV X,dp+Y
 					data = cast(ubyte)(data + y);
@@ -1243,7 +1245,8 @@ private:
 				{
 						x = nz = cpu_read(dp + data, rel_time);
 					}
-					goto inc_pc_loop;
+					pc++;
+					break;
 
 				case 0xE9: // MOV X,abs
 					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
@@ -1264,7 +1267,7 @@ private:
 					{
 						y = nz = cpu_read(dp + data, rel_time);
 					}
-					goto loop;
+					break;
 
 				case 0xEC: { // MOV Y,abs
 						temp = (cast(ushort[])(ram[pc .. pc + 2]))[0];
@@ -1272,7 +1275,7 @@ private:
 						{
 							y = nz = cpu_read(temp, rel_time);
 						}
-						goto loop;
+						break;
 					}
 
 				case 0x8D: // MOV Y,imm
@@ -1321,7 +1324,7 @@ private:
 				mov_abs_temp:
 						cpu_write(temp, (cast(ushort[])(ram[pc .. pc + 2]))[0], rel_time);
 						pc += 2;
-						goto loop;
+						break;
 					}
 
 				case 0xD9: // MOV dp+Y,X
@@ -1343,37 +1346,37 @@ private:
 				case 0x7D: // MOV A,X
 					a = x;
 					nz = x;
-					goto loop;
+					break;
 
 				case 0xDD: // MOV A,Y
 					a = y;
 					nz = y;
-					goto loop;
+					break;
 
 				case 0x5D: // MOV X,A
 					x = a;
 					nz = a;
-					goto loop;
+					break;
 
 				case 0xFD: // MOV Y,A
 					y = a;
 					nz = a;
-					goto loop;
+					break;
 
 				case 0x9D: // MOV X,SP
 					x = nz = cast(int)(sp - 0x101);
-					goto loop;
+					break;
 
 				case 0xBD: // MOV SP,X
 					sp = cast(ushort)(0x101 + x);
-					goto loop;
+					break;
 
 					//case 0xC6: // MOV (X),A (handled by MOV addr,A in group 2)
 
 				case 0xAF: // MOV (X)+,A
 					cpu_write(a + no_read_before_write, dp + x, rel_time);
 					x++;
-					goto loop;
+					break;
 
 					// 5. 8-BIT LOGIC OPERATION COMMANDS
 
@@ -1426,7 +1429,7 @@ private:
 				addr_0x28:
 						nz = data & cpu_read(addr, rel_time - 1);
 						cpu_write(nz, addr, rel_time);
-						goto loop;
+						break;
 					}
 
 					// LOGICAL_OP( 0x28, & ); // AND
@@ -1480,7 +1483,7 @@ private:
 				addr_0x08:
 						nz = data | cpu_read(addr, rel_time - 1);
 						cpu_write(nz, addr, rel_time);
-						goto loop;
+						break;
 					}
 					// LOGICAL_OP( 0x08, | ); // OR
 
@@ -1533,7 +1536,7 @@ private:
 				addr_0x48:
 						nz = data ^ cpu_read(addr, rel_time - 1);
 						cpu_write(nz, addr, rel_time);
-						goto loop;
+						break;
 					}
 					// LOGICAL_OP( 0x48, ^ ); // EOR
 
@@ -1580,7 +1583,7 @@ private:
 					nz = cpu_read(dp + x, rel_time - 1) - data;
 					c = ~nz;
 					nz &= 0xFF;
-					goto loop;
+					break;
 
 				case 0x69: // CMP dp,dp
 					data = cpu_read(dp + data, rel_time - 3);
@@ -1710,33 +1713,33 @@ private:
 				case 0xBC:
 					nz = a + 1;
 					a = cast(ubyte) nz;
-					goto loop;
+					break;
 					// INC_DEC_REG( a, + 1 ) // INC A
 				case 0x3D:
 					nz = x + 1;
 					x = cast(ubyte) nz;
-					goto loop;
+					break;
 					// INC_DEC_REG( x, + 1 ) // INC X
 				case 0xFC:
 					nz = y + 1;
 					y = cast(ubyte) nz;
-					goto loop;
+					break;
 					// INC_DEC_REG( y, + 1 ) // INC Y
 
 				case 0x9C:
 					nz = a - 1;
 					a = cast(ubyte) nz;
-					goto loop;
+					break;
 					// INC_DEC_REG( a, - 1 ) // DEC A
 				case 0x1D:
 					nz = x - 1;
 					x = cast(ubyte) nz;
-					goto loop;
+					break;
 					// INC_DEC_REG( x, - 1 ) // DEC X
 				case 0xDC:
 					nz = y - 1;
 					y = cast(ubyte) nz;
-					goto loop;
+					break;
 					// INC_DEC_REG( y, - 1 ) // DEC Y
 
 				case 0x9B: // DEC dp+X
@@ -1766,7 +1769,7 @@ private:
 						nz = (c >> 1 & 0x80) | (a >> 1);
 						c = a << 8;
 						a = nz;
-						goto loop;
+						break;
 					}
 
 				case 0x1C: // ASL A
@@ -1777,7 +1780,7 @@ private:
 						c = a << 1;
 						nz = c | temp;
 						a = cast(ubyte) nz;
-						goto loop;
+						break;
 					}
 
 				case 0x0B: // ASL dp
@@ -1834,7 +1837,7 @@ private:
 
 				case 0x9F: // XCN
 					nz = a = (a >> 4) | cast(ubyte)(a << 4);
-					goto loop;
+					break;
 
 					// 8. 16-BIT TRANSMISION COMMANDS
 
@@ -1916,7 +1919,7 @@ private:
 						nz = ((temp2 >> 1) | temp2) & 0x7F;
 						y = temp2 >> 8;
 						nz |= y;
-						goto loop;
+						break;
 					}
 
 				case 0x9E: // DIV YA,X
@@ -1942,7 +1945,7 @@ private:
 						nz = cast(ubyte) a;
 						a = cast(ubyte) a;
 
-						goto loop;
+						break;
 					}
 
 					// 11. DECIMAL COMPENSATION COMMANDS
@@ -1959,7 +1962,7 @@ private:
 
 					nz = a;
 					a = cast(ubyte) a;
-					goto loop;
+					break;
 
 				case 0xBE: // DAS
 					dprintf("SPC: suspicious opcode: DAS\n");
@@ -1973,7 +1976,7 @@ private:
 
 					nz = a;
 					a = cast(ubyte) a;
-					goto loop;
+					break;
 
 					// 12. BRANCHING COMMANDS
 
@@ -1986,10 +1989,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (nz & nz_neg_mask)
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( (nz & nz_neg_mask) )
 
@@ -1998,10 +2001,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (!(nz & nz_neg_mask))
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( !(nz & nz_neg_mask) )
 
@@ -2010,10 +2013,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (c & 0x100)
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( c & 0x100 )
 
@@ -2022,10 +2025,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (!(c & 0x100))
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( !(c & 0x100) )
 
@@ -2034,10 +2037,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (psw & v40)
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( psw & v40 )
 
@@ -2046,10 +2049,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (!(psw & v40))
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( !(psw & v40) )
 
@@ -2123,10 +2126,10 @@ private:
 						pc++;
 						pc += cast(byte) data;
 						if (y)
-							goto loop;
+							break;
 						pc -= cast(byte) data;
 						rel_time -= 2;
-						goto loop;
+						break;
 					}
 					// BRANCH( y )
 
@@ -2135,7 +2138,7 @@ private:
 					goto case;
 				case 0x5F: // JMP abs
 					pc = ((cast(const(ushort)[])(ram[pc .. pc + 2]))[0]);
-					goto loop;
+					break;
 
 					// 13. SUB-ROUTINE CALL RETURN COMMANDS
 
@@ -2171,7 +2174,7 @@ private:
 							if (sp == 0x100)
 								sp += 0x100;
 						}
-						goto loop;
+						break;
 					}
 
 				case 0x4F: { // PCALL offset
@@ -2187,7 +2190,7 @@ private:
 								sp += 0x100;
 							}
 						}
-						goto loop;
+						break;
 					}
 
 				case 0x01: // TCALL n
@@ -2218,7 +2221,7 @@ private:
 								sp += 0x100;
 							}
 						}
-						goto loop;
+						break;
 					}
 
 					// 14. STACK OPERATION COMMANDS
@@ -2245,7 +2248,7 @@ private:
 							dp = temp << 3 & 0x100;
 							nz = (temp << 4 & 0x800) | (~temp & z02);
 						}
-						goto loop;
+						break;
 					}
 
 				case 0x0D: { // PUSH PSW
@@ -2264,7 +2267,7 @@ private:
 							if (sp == 0x100)
 								sp += 0x100;
 						}
-						goto loop;
+						break;
 					}
 
 				case 0x2D: // PUSH A
@@ -2274,7 +2277,7 @@ private:
 						if (sp == 0x100)
 							sp += 0x100;
 					}
-					goto loop;
+					break;
 
 				case 0x4D: // PUSH X
 				{ // PUSH( x );
@@ -2283,7 +2286,7 @@ private:
 						if (sp == 0x100)
 							sp += 0x100;
 					}
-					goto loop;
+					break;
 
 				case 0x6D: // PUSH Y
 				{ // PUSH( y );
@@ -2292,7 +2295,7 @@ private:
 						if (sp == 0x100)
 							sp += 0x100;
 					}
-					goto loop;
+					break;
 
 				case 0xAE: // POP A
 				{ // POP( a );
@@ -2303,7 +2306,7 @@ private:
 							sp -= 0x100;
 						}
 					}
-					goto loop;
+					break;
 
 				case 0xCE: // POP X
 				{ // POP( x );
@@ -2314,7 +2317,7 @@ private:
 							sp -= 0x100;
 						}
 					}
-					goto loop;
+					break;
 
 				case 0xEE: // POP Y
 				{ // POP( y );
@@ -2325,7 +2328,7 @@ private:
 							sp -= 0x100;
 						}
 					}
-					goto loop;
+					break;
 
 					// 15. BIT OPERATION COMMANDS
 
@@ -2366,32 +2369,32 @@ private:
 							temp2 |= a;
 						cpu_write(temp2, data, rel_time);
 					}
-					goto loop;
+					break;
 
 				case 0x4A: // AND1 C,mem.bit
 					c &= CPU_mem_bit(ram[pc .. pc + 2], rel_time + 0);
 					pc += 2;
-					goto loop;
+					break;
 
 				case 0x6A: // AND1 C,/mem.bit
 					c &= ~CPU_mem_bit(ram[pc .. pc + 2], rel_time + 0);
 					pc += 2;
-					goto loop;
+					break;
 
 				case 0x0A: // OR1 C,mem.bit
 					c |= CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
 					pc += 2;
-					goto loop;
+					break;
 
 				case 0x2A: // OR1 C,/mem.bit
 					c |= ~CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
 					pc += 2;
-					goto loop;
+					break;
 
 				case 0x8A: // EOR1 C,mem.bit
 					c ^= CPU_mem_bit(ram[pc .. pc + 2], rel_time - 1);
 					pc += 2;
-					goto loop;
+					break;
 
 				case 0xEA: // NOT1 mem.bit
 					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
@@ -2401,7 +2404,7 @@ private:
 						temp2 ^= 1 << (data >> 13);
 						cpu_write(temp2, data & 0x1FFF, rel_time);
 					}
-					goto loop;
+					break;
 
 				case 0xCA: // MOV1 mem.bit,C
 					data = (cast(ushort[])(ram[pc .. pc + 2]))[0];
@@ -2412,53 +2415,53 @@ private:
 						temp2 = (temp2 & ~(1 << bit)) | ((c >> 8 & 1) << bit);
 						cpu_write(temp2 + no_read_before_write, data & 0x1FFF, rel_time);
 					}
-					goto loop;
+					break;
 
 				case 0xAA: // MOV1 C,mem.bit
 					c = CPU_mem_bit(ram[pc .. pc + 2], rel_time);
 					pc += 2;
-					goto loop;
+					break;
 
 					// 16. PROGRAM PSW FLAG OPERATION COMMANDS
 
 				case 0x60: // CLRC
 					c = 0;
-					goto loop;
+					break;
 
 				case 0x80: // SETC
 					c = ~0;
-					goto loop;
+					break;
 
 				case 0xED: // NOTC
 					c ^= 0x100;
-					goto loop;
+					break;
 
 				case 0xE0: // CLRV
 					psw &= ~(v40 | h08);
-					goto loop;
+					break;
 
 				case 0x20: // CLRP
 					dp = 0;
-					goto loop;
+					break;
 
 				case 0x40: // SETP
 					dp = 0x100;
-					goto loop;
+					break;
 
 				case 0xA0: // EI
 					dprintf("SPC: suspicious opcode: EI\n");
 					psw |= i04;
-					goto loop;
+					break;
 
 				case 0xC0: // DI
 					dprintf("SPC: suspicious opcode: DI\n");
 					psw &= ~i04;
-					goto loop;
+					break;
 
 					// 17. OTHER COMMANDS
 
 				case 0x00: // NOP
-					goto loop;
+					break;
 
 				case 0xFF: { // STOP
 						// handle PC wrap-around
@@ -2467,7 +2470,7 @@ private:
 							addr &= 0xFFFF;
 							pc = cast(ushort)addr;
 							dprintf("SPC: PC wrapped around\n");
-							goto loop;
+							break;
 						}
 					}
 					goto case;
@@ -2479,11 +2482,8 @@ private:
 					goto stop;
 				default:
 					assert(0); // catch any unhandled instructions
-				} // switch
-
-				assert(0); // catch any unhandled instructions
+				}
 			}
-		out_of_time:
 			rel_time -= m.cycle_table[ram[pc]]; // undo partial execution of opcode
 		stop:
 
