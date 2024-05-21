@@ -571,16 +571,7 @@ private:
 
 		ubyte[reg_count][2] smp_regs;
 
-		struct CPURegs {
-			int pc;
-			int a;
-			int x;
-			int y;
-			int psw;
-			int sp;
-		}
-
-		CPURegs cpu_regs;
+		CPUState cpu_regs;
 
 		rel_time_t dsp_time;
 		time_t spc_time;
