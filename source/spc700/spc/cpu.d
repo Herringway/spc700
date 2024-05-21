@@ -2583,20 +2583,35 @@ private:
 }
 
 unittest {
-	void runTest(const ubyte[] program, ushort loadAddress, ushort startAddress) {
+	import core.exception : AssertError;
+	import std.format : sformat;
+	import std.stdio : writefln;
+	void runTest(const ubyte[] program, ushort loadAddress, ushort startAddress, string file = __FILE__, ulong line = __LINE__) {
 		ubyte[0x10000] buffer;
 		buffer[loadAddress .. loadAddress + program.length] = program;
 		SNES_SPC spc;
+		static struct Result {
+			const(ubyte)[] op;
+			CPUState state;
+		}
+		Result[] results;
 		spc.hook = (op, state) {
-			import std.logger; debug infof("%04X: %(%02X %)", state.pc, op);
+			results ~= Result(op, state);
 		};
 		spc.initialize();
 		spc.load_buffer(buffer, startAddress);
 		spc.run_until_(0x100);
-		assert(spc.m.ram[0x8000] == 1);
+		if (spc.m.ram[0x8000] != 1) {
+			foreach (result; results) {
+				char[50] buf;
+				const ops = sformat!"%(%02X %)"(buf[], result.op);
+				writefln!"%04X: % -12s (A: %02X, X: %02X, Y: %02X)"(result.state.pc, ops, result.state.a, result.state.x, result.state.y);
+			}
+			throw new AssertError("Program failed!", file, line);
+		}
 	}
-	void runTestSimple(const ubyte[] program, ushort loadAddress) {
-		runTest(program, loadAddress, loadAddress);
+	void runTestSimple(const ubyte[] program, ushort loadAddress, string file = __FILE__, ulong line = __LINE__) {
+		runTest(program, loadAddress, loadAddress, file, line);
 	}
 	runTestSimple([ // basic MOV
 		0xE8, 0x01, // MOV A, #1
