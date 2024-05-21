@@ -775,6 +775,7 @@ private:
 
 	Timer* run_timer(Timer* t, rel_time_t time) @safe {
 		if (time >= t.next_time) {
+			assert(t.prescaler, "Division by zero");
 			int elapsed = ((time - t.next_time) / t.prescaler) + 1;
 			t.next_time += elapsed * t.prescaler;
 
