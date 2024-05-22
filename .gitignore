@@ -50,7 +50,9 @@ dkms.conf
 # misc
 *.wav
 *.spc
+*.s
 
 # dub stuff
 dub.selections.json
 .dub/
+*.lst
