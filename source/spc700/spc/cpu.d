@@ -2617,6 +2617,186 @@ unittest {
 	void runTestSimple(const ubyte[] program, ushort loadAddress, string file = __FILE__, ulong line = __LINE__) {
 		runTest(program, loadAddress, loadAddress, file, line);
 	}
+	void runBitTest(ubyte pos) {
+		{ // CLR1
+			ubyte[] test = [
+				0x8F, 0xFF, 0x20, // MOV $20, #FF
+				cast(ubyte)(0x12 + (pos * 0x20)), 0x20, // CLR1 $20.X
+				0x80, // SETC
+			];
+			foreach (i; 0 .. pos) {
+				test ~= [
+					0x6B, 0x20, // ROR $20
+				];
+			}
+			test ~= [
+				0x58, 0xFF, 0x20, // EOR $0020, #FF
+				0xE4, 0x20, // MOV A, $20
+				0xC5, 0x00, 0x80, // MOV $8000, A
+				0xFF, // STOP
+			];
+			runTestSimple(test, 0x100);
+		}
+		{ // SET1
+			ubyte[] test = [
+				0x8F, 0x00, 0x20, // MOV $20, #00
+				cast(ubyte)(0x02 + (pos * 0x20)), 0x20, // SET1 $20.X
+				0x60, // CLRC
+			];
+			foreach (i; 0 .. pos) {
+				test ~= [
+					0x6B, 0x20, // ROR $20
+				];
+			}
+			test ~= [
+				0xE4, 0x20, // MOV A, $20
+				0xC5, 0x00, 0x80, // MOV $8000, A
+				0xFF, // STOP
+			];
+			runTestSimple(test, 0x100);
+		}
+		{ // MOV1 ABS, B, C
+			ubyte[] test = [
+				0x8F, 0x00, 0x20, // MOV $20, #00
+				0x80, // SETC
+				0xCA, 0x20, cast(ubyte)(pos << 5), // MOV1 A, $20.X
+				0x60, // CLRC
+			];
+			foreach (i; 0 .. pos) {
+				test ~= [
+					0x6B, 0x20, // ROR $20
+				];
+			}
+			test ~= [
+				0xE4, 0x20, // MOV A, $20
+				0xC5, 0x00, 0x80, // MOV $8000, A
+				0xFF, // STOP
+			];
+			runTestSimple(test, 0x100);
+		}
+		runTestSimple([ // MOV1 C, ABS, B
+			0x8F, cast(ubyte)(1 << pos), 0x20, // MOV $20, #X
+			0x60, // CLRC
+			0xAA, 0x20, cast(ubyte)(pos << 5), // MOV1 $20.X, A
+			0xB0, 0x04, // BCS +4
+			0xE8, 0x00, // MOV A, #0
+			0x2F, 0x02, // BRA +2
+			0xE8, 0x01, // MOV A, #1
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		{ // NOT1 1
+			ubyte[] test = [
+				0x8F, 0x00, 0x20, // MOV $20, #00
+				0xEA, 0x20, cast(ubyte)(pos << 5), // NOT1 $20.X
+				0x60, // CLRC
+			];
+			foreach (i; 0 .. pos) {
+				test ~= [
+					0x6B, 0x20, // ROR $20
+				];
+			}
+			test ~= [
+				0xE4, 0x20, // MOV A, $20
+				0xC5, 0x00, 0x80, // MOV $8000, A
+				0xFF, // STOP
+			];
+			runTestSimple(test, 0x100);
+		}
+		{ // NOT1 2
+			ubyte[] test = [
+				0x8F, 0xFF, 0x20, // MOV $20, #FF
+				0xEA, 0x20, cast(ubyte)(pos << 5), // NOT1 $20.X
+				0x80, // SETC
+			];
+			foreach (i; 0 .. pos) {
+				test ~= [
+					0x6B, 0x20, // ROR $20
+				];
+			}
+			test ~= [
+				0x58, 0xFF, 0x20, // EOR $0020, #FF
+				0xE4, 0x20, // MOV A, $20
+				0xC5, 0x00, 0x80, // MOV $8000, A
+				0xFF, // STOP
+			];
+			runTestSimple(test, 0x100);
+		}
+	}
+	void runOpTests(ubyte baseArithOp, ubyte v1, ubyte v2) {
+		runTestSimple([ // OP !ABS
+			0x8F, v2, 0x20, // MOV $20, #v2
+			0xE8, v1, // MOV A, #v1
+			cast(ubyte)(baseArithOp + 0x01), 0x20, 0x00, // OP A, $0020
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		runTestSimple([ // OP (X)
+			0x8F, v2, 0x20, // MOV $20, #1
+			0xE8, v1, // MOV A, #v1
+			0xCD, 0x20, // MOV X, #20
+			cast(ubyte)(baseArithOp + 0x02), // OP A, (X)
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		runTestSimple([ // OP IMM
+			0xE8, v1, // MOV A, #v1
+			cast(ubyte)(baseArithOp + 0x04), v2, // OP A, #v2
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		runTestSimple([ // OP (D+X)
+			0x8F, v2, 0x20, // MOV $20, #v2
+			0xE8, v1, // MOV A, #v1
+			0xCD, 0x18, // MOV X, #18
+			cast(ubyte)(baseArithOp + 0x10), 0x08, // OP A, ($08+X)
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		runTestSimple([ // OP !ABS
+			0x8F, v2, 0x20, // MOV $20, #v2
+			0xE8, v1, // MOV A, #v1
+			0xCD, 0x18, // MOV X, #18
+			cast(ubyte)(baseArithOp + 0x11), 0x08, 0x00, // OP A, $0008+X
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		runTestSimple([ // OP !ABS
+			0x8F, v2, 0x20, // MOV $20, #v2
+			0xE8, v1, // MOV A, #v1
+			0x8D, 0x14, // MOV Y, #14
+			cast(ubyte)(baseArithOp + 0x12), 0x0C, 0x00, // OP A, $000C+Y
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+		runTestSimple([ // OP D, IMM
+			0x8F, v1, 0x20, // MOV $20, #v1
+			cast(ubyte)(baseArithOp + 0x14), v2, 0x20, // OP $0020, #v2
+			0xE4, 0x20, // MOV A, $20
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+		], 0x100);
+	}
+	void runTCallTest(ubyte idx) {
+		ushort[] funTable;
+		// table is written backwards - fun 0 is at FFDE, fun 15 at FFC0
+		foreach (i; idx + 1 .. 16) {
+			funTable ~= 0;
+		}
+		funTable ~= 0xFFBD;
+		foreach (i; 0 .. idx) {
+			funTable ~= 0;
+		}
+		runTestSimple(cast(ubyte[])[ // TCALL/RET
+			0xE8, 0x02, // MOV A, #2
+			cast(ubyte)(0x01 + (idx << 4)), // TCALL X
+			0xC5, 0x00, 0x80, // MOV $8000, A
+			0xFF, // STOP
+			0xE8, 0x01, // MOV A, #1
+			0x6F, // RET
+			// this should be $FFC0
+		] ~ cast(ubyte[])funTable, 0xFFB6);
+	}
 	runTestSimple([ // basic MOV
 		0xE8, 0x01, // MOV A, #1
 		0xC5, 0x00, 0x80, // MOV $8000, A
@@ -2630,6 +2810,22 @@ unittest {
 	runTestSimple([ // MOV Y
 		0x8D, 0x01, // MOV Y, #1
 		0xCC, 0x00, 0x80, // MOV $8000, Y
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // MOV X, A, MOV A, X
+		0xE8, 0x01, // MOV A, #1
+		0x5D, // MOV X, A
+		0xE8, 0x00, // MOV A, #0
+		0x7D, // MOV A, X
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // MOV Y, A, MOV A, Y
+		0xE8, 0x01, // MOV A, #1
+		0xFD, // MOV Y, A
+		0xE8, 0x00, // MOV A, #0
+		0xDD, // MOV A, Y
+		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
 	], 0x100);
 	runTestSimple([ // PUSH/POP A
@@ -2656,6 +2852,35 @@ unittest {
 		0xCC, 0x00, 0x80, // MOV $8000, Y
 		0xFF, // STOP
 	], 0x100);
+	runTestSimple([ // MOV X, SP, MOV SP, X
+		0x8D, 0x01, // MOV Y, #1
+		0x6D, // PUSH Y
+		0x9D, // MOV X, SP
+		0x8D, 0x00, // MOV Y, #1
+		0x6D, // PUSH Y
+		0x9D, // MOV X, SP
+		0x7D, // MOV A, X
+		0x60, // CLRC
+		0x88, 0x01, // ADC A, #01
+		0x5D, // MOV X, A
+		0xBD, // MOV SP, X
+		0xAE, // POP A
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // MOV X, SP, MOV SP, X 2
+		0x8D, 0x01, // MOV Y, #1
+		0x6D, // PUSH Y
+		0x9D, // MOV X, SP
+		0x8D, 0x00, // MOV Y, #1
+		0x6D, // PUSH Y
+		0x9D, // MOV X, SP
+		0x7D, // MOV A, X
+		0x80, // SETC
+		0xA8, 0xEC, // SBC A, #EC
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
 	runTestSimple([ // basic BRA
 		0xE8, 0x01, // MOV A, #1
 		0x2F, 0x02, // BRA +2
@@ -2673,6 +2898,16 @@ unittest {
 		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
 	], 0x100);
+	runTestSimple([ // basic BEQ 2
+		0xE8, 0x01, // MOV A, #1
+		0x68, 0x01, // CMP A #1
+		0xF0, 0x04, // BEQ +4
+		0xE8, 0x00, // MOV A, #0
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x01, // MOV A, #1
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
 	runTestSimple([ // basic BNE
 		0xE8, 0x01, // MOV A, #1
 		0x68, 0x00, // CMP A #0
@@ -2683,7 +2918,35 @@ unittest {
 		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
 	], 0x100);
+	runTestSimple([ // basic BNE 2
+		0xE8, 0x01, // MOV A, #1
+		0x68, 0x01, // CMP A #1
+		0xD0, 0x04, // BNE +4
+		0xE8, 0x01, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x00, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
 	runTestSimple([ // basic BCC
+		0x80, // SETC
+		0x90, 0x04, // BCC +4
+		0xE8, 0x01, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x00, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BCC 2
+		0x60, // CLRC
+		0x90, 0x04, // BCC +4
+		0xE8, 0x00, // MOV A, #0
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x01, // MOV A, #1
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BCC 3
 		0xE8, 0x01, // MOV A, #1
 		0x68, 0x10, // CMP A #16
 		0x90, 0x04, // BCC +4
@@ -2703,7 +2966,36 @@ unittest {
 		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
 	], 0x100);
+	runTestSimple([ // basic BCC, NOTC
+		0xE8, 0x01, // MOV A, #1
+		0x68, 0x10, // CMP A #16
+		0xED, // NOTC
+		0x90, 0x04, // BCC +4
+		0xE8, 0x01, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x00, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
 	runTestSimple([ // basic BCS
+		0x80, // SETC
+		0xB0, 0x04, // BCS +4
+		0xE8, 0x00, // MOV A, #0
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x01, // MOV A, #1
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BCS 2
+		0x60, // CLRC
+		0xB0, 0x04, // BCS +4
+		0xE8, 0x01, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x00, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BCS 3
 		0xE8, 0x01, // MOV A, #1
 		0x68, 0x10, // CMP A #16
 		0xB0, 0x04, // BCS +4
@@ -2753,6 +3045,44 @@ unittest {
 		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
 	], 0x100);
+	runTestSimple([ // basic BVC
+		0xE0, // CLRV
+		0x50, 0x04, // BVC +4
+		0xE8, 0x00, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x01, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BVC 2
+		0xE8, 0x7F, // MOV A, #7F
+		0x88, 0x02, // ADC A, #01
+		0x50, 0x04, // BVC +4
+		0xE8, 0x01, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x00, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BVS
+		0xE8, 0x7F, // MOV A, #7F
+		0x88, 0x02, // ADC A, #01
+		0x70, 0x04, // BVS +4
+		0xE8, 0x00, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x01, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
+	runTestSimple([ // basic BVS 2
+		0xE0, // CLRV
+		0x70, 0x04, // BVS +4
+		0xE8, 0x01, // MOV A, #1
+		0x2F, 0x02, // BRA +2
+		0xE8, 0x00, // MOV A, #0
+		0xC5, 0x00, 0x80, // MOV $8000, A
+		0xFF, // STOP
+	], 0x100);
 	runTestSimple([ // PUSH PSW/Z
 		0xE8, 0x01, // MOV A, #1
 		0x68, 0x00, // CMP A #0
@@ -2792,20 +3122,33 @@ unittest {
 		0x6C, 0x00, 0x80, // ROR $8000
 		0xFF, // STOP
 	], 0x100);
-	runTestSimple([ // AND
-		0xE8, 0xFF, // MOV A, #FF
-		0x28, 0x01, // AND A, #1
+	foreach (i; 0 .. 8) {
+		runBitTest(cast(ubyte)i);
+	}
+	runOpTests(0x24, 0xFF, 0x01); // AND 0xFF & 0x01 == 1
+	runOpTests(0x04, 0x00, 0x01); // OR 0 | 1 == 1
+	runOpTests(0x44, 0x80, 0x81); // EOR 0x80 ^ 0x81 == 1
+	runOpTests(0x84, 0xFF, 0x02); // ADD -1 + 2 == 1
+	runOpTests(0xA4, 0x03, 0x01); // SBC 3 - 1 - 1 == 1
+	runTestSimple([ // CALL/RET
+		0xE8, 0x02, // MOV A, #2
+		0x3F, 0x09, 0x01, // CALL $0109
 		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
+		0xE8, 0x01, // MOV A, #1
+		0x6F, // RET
 	], 0x100);
-	runTestSimple([ // AND X
-		0x8F, 0x01, 0x20, // MOV $20, #1
-		0xE8, 0xFF, // MOV A, #FF
-		0xCD, 0x20, // MOV X, #20
-		0x26, // AND A, (X)
+	runTestSimple([ // PCALL/RET
+		0xE8, 0x02, // MOV A, #2
+		0x4F, 0x08, // PCALL $08
 		0xC5, 0x00, 0x80, // MOV $8000, A
 		0xFF, // STOP
-	], 0x100);
+		0xE8, 0x01, // MOV A, #1
+		0x6F, // RET
+	], 0xFF00);
+	foreach (i; 0 .. 16) {
+		runTCallTest(cast(ubyte)i);
+	}
 }
 
 void dprintf(const char*) nothrow @safe {
