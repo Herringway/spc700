@@ -2586,6 +2586,7 @@ unittest {
 	import core.exception : AssertError;
 	import std.format : sformat;
 	import std.stdio : writefln;
+	string pswString = "nvpbhizc";
 	void runTest(const ubyte[] program, ushort loadAddress, ushort startAddress, string file = __FILE__, ulong line = __LINE__) {
 		ubyte[0x10000] buffer;
 		buffer[loadAddress .. loadAddress + program.length] = program;
@@ -2603,9 +2604,12 @@ unittest {
 		spc.run_until_(0x100);
 		if (spc.m.ram[0x8000] != 1) {
 			foreach (result; results) {
+				char flag(ubyte idx) {
+					return cast(char)(pswString[idx] - (result.state.psw & (1 << idx)) * 0x20);
+				}
 				char[50] buf;
 				const ops = sformat!"%(%02X %)"(buf[], result.op);
-				writefln!"%04X: % -12s (A: %02X, X: %02X, Y: %02X)"(result.state.pc, ops, result.state.a, result.state.x, result.state.y);
+				writefln!"%04X: % -12s % -6s (A: %02X, X: %02X, Y: %02X %s%s%s%s%s%s%s%s)"(result.state.pc, ops, mnemonics[result.op[0]], result.state.a, result.state.x, result.state.y, flag(0), flag(1), flag(2), flag(3), flag(4), flag(5), flag(6), flag(7));
 			}
 			throw new AssertError("Program failed!", file, line);
 		}
