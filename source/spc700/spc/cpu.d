@@ -563,8 +563,9 @@ public:
 
 	enum signature_size = 35;
 
-private:
 	SPC_DSP dsp;
+	state_t m;
+private:
 
 	struct state_t {
 		Timer[timer_count] timers;
@@ -613,7 +614,6 @@ private:
 		ubyte[0x10000] ram;
 	}
 
-	state_t m;
 
 	enum rom_addr = 0xFFC0;
 
