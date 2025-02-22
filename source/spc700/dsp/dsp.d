@@ -594,9 +594,6 @@ public:
 		int hidden_env; // used by GAIN mode 7, very obscure quirk
 		ubyte t_envx_out;
 	};
-private:
-	enum brr_block_size = 9;
-
 	struct state_t {
 		ubyte[register_count] regs;
 
@@ -660,6 +657,9 @@ private:
 	}
 
 	state_t m;
+private:
+	enum brr_block_size = 9;
+
 
 	void init_counter() @safe {
 		m.counter = 0;
